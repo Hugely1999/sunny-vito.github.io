@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页 - 能源管理系统</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/home.css">
+    <link rel="stylesheet" href="css/ai-assistant.css">
+    <style>
+        /* 添加内联样式处理图标 */
+        .placeholder-icon {
+            width: 24px;
+            height: 24px;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #666;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        
+        .nav-item.active .placeholder-icon {
+            background-color: #00B45E;
+            color: white;
+        }
+
+        /* 色彩图标样式 */
+        .purple-icon {
+            background-color: rgba(138, 43, 226, 0.1);
+            color: #8A2BE2;
+        }
+        
+        /* 首页内容区域样式调整，与工作台页面保持一致 */
+        .main-content {
+            padding-top: 0 !important;
+        }
+        
+        /* 注意：不要直接给.content-wrapper设置最大宽度，这会覆盖原有样式 */
+        /* 而是使用与index.html相同的结构 */
+        .content-wrapper {
+            padding: 24px 24px 0 !important;
+            margin-top: 64px !important; /* 头部高度为64px */
+        }
+        
+        /* 需要删除之前设置的内部容器max-width */
+        .home-content {
+            width: 100%;
+            padding: 0 !important;
+        }
+        
+        /* 确保content-layout不会影响宽度，并保持整体对齐 */
+        .content-layout {
+            width: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        
+        /* 移除可能干扰布局的样式 */
+        .header {
+            z-index: 100;
+        }
+        
+        /* 媒体查询保持与其他页面一致 */
+        @media (max-width: 1600px), (max-width: 1200px) {
+            .content-wrapper {
+                padding: 24px 24px 0 !important;
+            }
+        }
+        
+        /* 统计数据图标颜色调整 */
+        /* 账户相关 - 蓝紫色 */
+        .icon-box.account-icon {
+            background-color: rgba(65, 105, 225, 0.1);
+            color: #4169E1;
+        }
+        
+        /* 启用相关 - 绿色 */
+        .icon-box.enable-icon {
+            background-color: rgba(41, 176, 97, 0.1);
+            color: #29B061;
+        }
+        
+        /* 钱包/余额相关 - 蓝色 */
+        .icon-box.wallet-icon {
+            background-color: rgba(27, 126, 242, 0.1);
+            color: #1B7EF2;
+        }
+        
+        /* 欠费相关 - 红色 */
+        .icon-box.debt-icon {
+            background-color: rgba(255, 91, 90, 0.1);
+            color: #FF5B5A;
+        }
+        
+        /* 充足相关 - 绿色 */
+        .icon-box.sufficient-icon {
+            background-color: rgba(41, 176, 97, 0.1);
+            color: #29B061;
+        }
+        
+        /* 预警相关 - 黄色 */
+        .icon-box.warning-icon {
+            background-color: rgba(252, 185, 44, 0.1);
+            color: #FCB92C;
+        }
+        
+        /* 故障相关 - 橙红色 */
+        .icon-box.fault-icon {
+            background-color: rgba(255, 68, 14, 0.1);
+            color: #FF440E;
+        }
+        
+        /* 调整顶部布局结构 - 使武汉产业园占40%宽度，减小与第二排的间距 */
+        .top-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            width: 100%;
+            margin-bottom: 8px; /* 进一步减小底部边距，从12px减少到8px */
+            padding-left: 0;
+            padding-right: 0;
+        }
+        
+        /* 减小第二排上边距并调整布局 */
+        .bottom-row {
+            margin-top: 0;
+            gap: 20px;
+            display: flex;
+            align-items: stretch; /* 让子元素高度一致 */
+            min-height: 360px; /* 增加最小高度 */
+            padding-bottom: 24px; /* 确保底部有足够空间 */
+            width: 100%; /* 确保占满整个内容区域宽度 */
+            padding-left: 0;
+            padding-right: 0;
+        }
+        
+        /* 左侧数据区域设置，精确计算宽度比例 */
+        .data-column {
+            flex: 0 0 calc(70% - 10px); /* 控制左侧区域宽度，精确计算间距 */
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        /* 设置图表卡片样式 */
+        .data-card {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-radius: 4px;
+            border: 1px solid #f0f0f0;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            background-color: #fff;
+            overflow: hidden;
+        }
+        
+        .chart-placeholder {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 150px;
+            font-size: 14px;
+            color: #999;
+            background-color: #fafafa;
+            margin: 15px;
+            border-radius: 4px;
+        }
+        
+        /* 欠费排行榜宽度调整与钱包、账单信息垂直对齐 */
+        .debt-ranking {
+            flex: 0 0 calc(30% - 10px); /* 固定宽度为30%，精确计算 */
+            height: 100%; /* 设置高度与左侧图表卡片对齐 */
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #f0f0f0; /* 确保有边框 */
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            background-color: #fff;
+            padding: 0; /* 重置内边距 */
+            overflow: hidden; /* 确保内容不溢出 */
+        }
+        
+        /* 确保卡片标题样式一致 */
+        .data-card .card-title, .debt-ranking .card-title {
+            padding: 16px 20px;
+            margin: 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        /* TOP10列表内边距优化 */
+        .top10-list {
+            flex: 1;
+            overflow-y: visible; /* 去掉滚动条 */
+            padding: 0 15px 15px;
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between; /* 使项目均匀分布 */
+        }
+        
+        /* 调整TOP10项目紧凑度 */
+        .top10-item {
+            margin-bottom: 4px; /* 减小间距使更多项可见 */
+        }
+        
+        .top10-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        /* 移除滚动条样式 */
+        
+        /* 确保排行榜内容在有限宽度内正确显示 */
+        .company-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: calc(100% - 80px); /* 留出足够空间给金额 */
+        }
+        
+        .debt-amount {
+            flex-shrink: 0;
+            min-width: 80px;
+            text-align: right;
+        }
+        
+        @media (max-width: 1200px) {
+            .bottom-row {
+                flex-direction: column;
+            }
+            
+            .data-column, .debt-ranking {
+                flex: 0 0 100%;
+                max-width: 100%;
+            }
+        }
+        
+        /* 产业园卡片调整为40%宽度 */
+        .industry-park-card {
+            width: 40%;
+            flex: 0 0 40%; /* 固定宽度为40% */
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+            background-color: #fff;
+            border-radius: 4px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        /* 信息卡片容器宽度调整为剩余宽度 */
+        .info-cards-container {
+            flex: 0 0 calc(60% - 20px); /* 精确计算右侧宽度和间距 */
+        }
+        
+        /* 顶部水平布局 */
+        .industry-park-upper {
+            display: flex;
+            flex-direction: row;
+            padding: 24px; /* 增加内边距 */
+        }
+        
+        /* 左侧区域 - 标题和图片 */
+        .industry-park-left {
+            flex: 0 0 35%; /* 稍微减少左侧比例，给右侧更多空间 */
+            display: flex;
+            flex-direction: column;
+            padding-right: 24px; /* 增加右侧内边距 */
+        }
+        
+        /* 右侧区域 - 功能入口和表计统计 */
+        .industry-park-right {
+            flex: 0 0 65%; /* 增加右侧比例 */
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 标题和类型标签样式调整 */
+        .park-info {
+            margin-bottom: 16px; /* 调整标题与图片间距为16px */
+            padding-top: 0;
+            margin-top: -8px; /* 向上调整标题间距 */
+        }
+        
+        .park-title {
+            font-size: 24px;
+            font-weight: 500;
+            color: #242424;
+            margin-top: 0;
+            margin-bottom: 8px;
+        }
+        
+        .park-tag {
+            display: inline-block;
+            background-color: #f5f5f5;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        /* 功能按钮区域 */
+        .function-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: auto auto;
+            gap: 20px; /* 增加按钮间距 */
+            margin-bottom: 28px; /* 增加与下方统计数据的间距 */
+        }
+        
+        /* 园区图片样式 - 适配固定尺寸图片并左对齐 */
+        .park-img-container {
+            width: 180px;
+            height: 220px;
+            border-radius: 4px;
+            overflow: hidden;
+            background-color: #f5f5f5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 8px; /* 减小顶部边距，图片往上移 */
+            margin-bottom: 20px; /* 增加底部边距保持整体平衡 */
+            margin-left: 0; /* 左对齐 */
+            margin-right: 0;
+            padding: 6px; /* 添加内边距，确保图片不贴边框 */
+        }
+        
+        .park-img {
+            width: 180px; /* 固定宽度为180px */
+            height: 220px; /* 固定高度为220px */
+            object-fit: cover;
+            padding: 12px; /* 添加图片内边距 */
+        }
+        
+        /* 表计数据布局优化 */
+        .meter-statistics {
+            border-top: 1px solid #f0f0f0;
+            padding-top: 20px; /* 减少上边距 */
+            padding-bottom: 14px; /* 减少下边距 */
+        }
+        
+        .meter-overview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px; /* 减少间距 */
+            width: 100%;
+            align-items: stretch; /* 确保子元素高度一致拉伸 */
+        }
+        
+        .total-meters {
+            flex: 0 0 110px; /* 减少宽度 */
+            background-color: rgba(27, 126, 242, 0.05);
+            border-radius: 8px;
+            padding: 12px; /* 减少内边距 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center; /* 垂直居中内容 */
+            height: 100%; /* 确保高度占满父容器 */
+        }
+        
+        .meter-status {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 16px; /* 减少行间距 */
+            justify-content: space-between; /* 均匀分布内容 */
+        }
+        
+        .status-row {
+            display: flex;
+            width: 100%;
+            flex-wrap: wrap;
+            gap: 24px; /* 减少水平间距 */
+        }
+        
+        .status-item {
+            flex: 0 0 auto;
+            min-width: 65px; /* 减少最小宽度 */
+            margin-bottom: 2px; /* 减少紧凑视图间距 */
+        }
+        
+        /* 增加文字显示优化 */
+        .status-label {
+            white-space: nowrap; /* 防止标签文字换行 */
+            font-size: 13px; /* 稍微减小字体 */
+        }
+        
+        /* 针对通断未知项特殊处理 */
+        .status-item:last-child {
+            min-width: 90px;
+        }
+        
+        @media (max-width: 1200px) {
+            .status-row {
+                gap: 20px; /* 小屏幕下减小间距 */
+            }
+            
+            .status-item {
+                min-width: 60px;
+            }
+        }
+        
+        /* 电能分析和电力监控多任务菜单标签样式 */
+        .tab.multitask.active::after {
+            display: none !important; /* 去掉多任务菜单下划线 */
+        }
+        
+        .tab.multitask {
+            color: #8D9199 !important;
+            font-weight: normal !important;
+            background-color: transparent !important;
+        }
+        
+        .header-bottom .tab.multitask.active {
+            color: #8D9199 !important;
+            font-weight: normal !important;
+            background-color: transparent !important;
+        }
+        
+        /* 消费信息图表样式 */
+        .consumption-charts {
+            display: flex;
+            width: 100%;
+            height: 300px;
+            padding: 15px 0;
+        }
+        
+        .chart-container {
+            position: relative;
+            border-radius: 4px;
+        }
+        
+        .bar-chart {
+            flex: 1;
+            min-width: 60%;
+            height: 100%;
+            padding-right: 15px;
+        }
+        
+        .pie-chart {
+            flex: 0 0 40%;
+            height: 100%;
+            position: relative;
+            padding-left: 15px;
+            margin-left: 5px;
+            background: none !important;
+            border-radius: 8px;
+        }
+        
+        .pie-chart:after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            background: none !important;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <!-- 左侧导航 -->
+        <div class="sidebar">
+            <div class="logo-container">
+                <div class="logo">
+                    <div class="placeholder-icon" style="background-color: #00B45E; color: white;">CE</div>
+                </div>
+            </div>
+            <div class="nav-container">
+                <ul class="nav-list">
+                    <li class="nav-item active">
+                        <a href="home.html" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">首</div>
+                            </div>
+                            <span>首页</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="index.html" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">工</div>
+                            </div>
+                            <span>工作台</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="power-monitoring.html" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">电</div>
+                            </div>
+                            <span>电力监控</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="power-analysis.html" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">分</div>
+                            </div>
+                            <span>电能分析</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">成</div>
+                            </div>
+                            <span>成本分析</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">新</div>
+                            </div>
+                            <span>新能源</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">碳</div>
+                            </div>
+                            <span>碳资产</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="energy-trend.html" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">安</div>
+                            </div>
+                            <span>安全用电</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <!-- 头部导航区 -->
+            <header class="header">
+                <div class="header-top">
+                    <div class="nav-toggle">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M3 12H21" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3 6H21" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3 18H21" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="breadcrumb active">
+                        <span>首页</span>
+                    </div>
+                    <div class="user-area">
+                        <div class="icon-group">
+                            <div class="icon-circle">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M21 21L16.65 16.65" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </div>
+                            <div class="icon-circle">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M19 14C19 11.7909 16.7614 10 14 10H12.8184C10.6702 10 8.71062 9.00736 7.55375 7.31655C7.30044 6.9535 7 5.93336 7 5.93335C7 5.31352 7.62791 4.78719 8.25574 4.8643C11.303 5.16203 13.0274 5.88513 15.0858 7.94353C16.634 9.49176 19 10.9789 19 14Z" stroke="#666" stroke-width="2"/>
+                                    <path d="M19 14V18C19 19.1046 18.1046 20 17 20H7C5.89543 20 5 19.1046 5 18V6C5 4.89543 5.89543 4 7 4" stroke="#666" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div class="icon-circle">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M18 8C18 6.4087 17.3679 4.88258 16.2426 3.75736C15.1174 2.63214 13.5913 2 12 2C10.4087 2 8.88258 2.63214 7.75736 3.75736C6.63214 4.88258 6 6.4087 6 8C6 15 3 17 3 17H21C21 17 18 15 18 8Z" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M13.73 21C13.5542 21.3031 13.3019 21.5547 12.9982 21.7295C12.6946 21.9044 12.3504 21.9965 12 21.9965C11.6496 21.9965 11.3054 21.9044 11.0018 21.7295C10.6982 21.5547 10.4458 21.3031 10.27 21" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </div>
+                            <div class="icon-circle">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M19.4 15C19.2669 15.3016 19.2272 15.6362 19.286 15.9606C19.3448 16.285 19.4995 16.5843 19.73 16.82L19.79 16.88C19.976 17.0657 20.1235 17.2863 20.2241 17.5291C20.3248 17.7719 20.3766 18.0322 20.3766 18.295C20.3766 18.5578 20.3248 18.8181 20.2241 19.0609C20.1235 19.3037 19.976 19.5243 19.79 19.71C19.6043 19.896 19.3837 20.0435 19.1409 20.1441C18.8981 20.2448 18.6378 20.2966 18.375 20.2966C18.1122 20.2966 17.8519 20.2448 17.6091 20.1441C17.3663 20.0435 17.1457 19.896 16.96 19.71L16.9 19.65C16.6643 19.4195 16.365 19.2648 16.0406 19.206C15.7162 19.1472 15.3816 19.1869 15.08 19.32C14.7842 19.4468 14.532 19.6572 14.3543 19.9255C14.1766 20.1938 14.0813 20.5082 14.08 20.83V21C14.08 21.5304 13.8693 22.0391 13.4942 22.4142C13.1191 22.7893 12.6104 23 12.08 23C11.5496 23 11.0409 22.7893 10.6658 22.4142C10.2907 22.0391 10.08 21.5304 10.08 21V20.91C10.0723 20.579 9.96512 20.258 9.77251 19.9887C9.5799 19.7194 9.31074 19.5143 9 19.4C8.69838 19.2669 8.36381 19.2272 8.03941 19.286C7.71502 19.3448 7.41568 19.4995 7.18 19.73L7.12 19.79C6.93425 19.976 6.71368 20.1235 6.47088 20.2241C6.22808 20.3248 5.96783 20.3766 5.705 20.3766C5.44217 20.3766 5.18192 20.3248 4.93912 20.2241C4.69632 20.1235 4.47575 19.976 4.29 19.79C4.10405 19.6043 3.95653 19.3837 3.85588 19.1409C3.75523 18.8981 3.70343 18.6378 3.70343 18.375C3.70343 18.1122 3.75523 17.8519 3.85588 17.6091C3.95653 17.3663 4.10405 17.1457 4.29 16.96L4.35 16.9C4.58054 16.6643 4.73519 16.365 4.794 16.0406C4.85282 15.7162 4.81312 15.3816 4.68 15.08C4.55324 14.7842 4.34276 14.532 4.07447 14.3543C3.80618 14.1766 3.49179 14.0813 3.17 14.08H3C2.46957 14.08 1.96086 13.8693 1.58579 13.4942C1.21071 13.1191 1 12.6104 1 12.08C1 11.5496 1.21071 11.0409 1.58579 10.6658C1.96086 10.2907 2.46957 10.08 3 10.08H3.09C3.42099 10.0723 3.742 9.96512 4.0113 9.77251C4.28059 9.5799 4.48572 9.31074 4.6 9C4.73312 8.69838 4.77282 8.36381 4.714 8.03941C4.65519 7.71502 4.50054 7.41568 4.27 7.18L4.21 7.12C4.02405 6.93425 3.87653 6.71368 3.77588 6.47088C3.67523 6.22808 3.62343 5.96783 3.62343 5.705C3.62343 5.44217 3.67523 5.18192 3.77588 4.93912C3.87653 4.69632 4.02405 4.47575 4.21 4.29C4.39575 4.10405 4.61632 3.95653 4.85912 3.85588C5.10192 3.75523 5.36217 3.70343 5.625 3.70343C5.88783 3.70343 6.14808 3.75523 6.39088 3.85588C6.63368 3.95653 6.85425 4.10405 7.04 4.29L7.1 4.35C7.33568 4.58054 7.63502 4.73519 7.95941 4.794C8.28381 4.85282 8.61838 4.81312 8.92 4.68H9C9.29577 4.55324 9.54802 4.34276 9.72569 4.07447C9.90337 3.80618 9.99872 3.49179 10 3.17V3C10 2.46957 10.2107 1.96086 10.5858 1.58579C10.9609 1.21071 11.4696 1 12 1C12.5304 1 13.0391 1.21071 13.4142 1.58579C13.7893 1.96086 14 2.46957 14 3V3.09C14.0013 3.41179 14.0966 3.72618 14.2743 3.99447C14.452 4.26276 14.7042 4.47324 15 4.6C15.3016 4.73312 15.6362 4.77282 15.9606 4.714C16.285 4.65519 16.5843 4.50054 16.82 4.27L16.88 4.21C17.0657 4.02405 17.2863 3.87653 17.5291 3.77588C17.7719 3.67523 18.0322 3.62343 18.295 3.62343C18.5578 3.62343 18.8181 3.67523 19.0609 3.77588C19.3037 3.87653 19.5243 4.02405 19.71 4.21C19.896 4.39575 20.0435 4.61632 20.1441 4.85912C20.2448 5.10192 20.2966 5.36217 20.2966 5.625C20.2966 5.88783 20.2448 6.14808 20.1441 6.39088C20.0435 6.63368 19.896 6.85425 19.71 7.04L19.65 7.1C19.4195 7.33568 19.2648 7.63502 19.206 7.95941C19.1472 8.28381 19.1869 8.61838 19.32 8.92V9C19.4468 9.29577 19.6572 9.54802 19.9255 9.72569C20.1938 9.90337 20.5082 9.99872 20.83 10H21C21.5304 10 22.0391 10.2107 22.4142 10.5858C22.7893 10.9609 23 11.4696 23 12C23 12.5304 22.7893 13.0391 22.4142 13.4142C22.0391 13.7893 21.5304 14 21 14H20.91C20.5882 14.0013 20.2738 14.0966 20.0055 14.2743C19.7372 14.452 19.5268 14.7042 19.4 15Z" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="user-info">
+                            <div class="avatar">ZM</div>
+                            <p class="user-name">张淼妙</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-bottom">
+                    <div class="tabs">
+                        <div class="tab active">首页</div>
+                        <div class="tab multitask">多任务菜单</div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 内容区域 -->
+            <div class="content-wrapper">
+                <div class="home-content">
+                    <!-- 采用两排布局结构 -->
+                    <div class="content-layout">
+                        <!-- 第一排：武汉产业园、账户信息、余额信息、钱包信息、账单信息 -->
+                        <div class="top-row">
+                            <!-- 武汉产业园 -->
+                            <div class="industry-park-card">
+                                <!-- 顶部布局：左侧为标题和图片，右侧为功能入口和表计统计 -->
+                                <div class="industry-park-upper">
+                                    <!-- 左侧：标题和图片 -->
+                                    <div class="industry-park-left">
+                                        <div class="park-info">
+                                            <h2 class="park-title">武汉产业园</h2>
+                                        </div>
+                                        <div class="park-img-container">
+                                            <img src="images/industry-park.png" alt="武汉产业园" class="park-img">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 右侧：功能入口按钮和表计统计 -->
+                                    <div class="industry-park-right">
+                                        <!-- 功能按钮 -->
+                                        <div class="function-buttons">
+                                            <!-- 第一行：充值和查账单 -->
+                                            <div class="function-button">
+                                                <div class="icon-box wallet-icon">
+                                                    <i>充</i>
+                                                </div>
+                                                <div class="function-text">充值</div>
+                                            </div>
+                                            <div class="function-button">
+                                                <div class="icon-box wallet-icon">
+                                                    <i>查</i>
+                                                </div>
+                                                <div class="function-text">查账单</div>
+                                            </div>
+                                            <!-- 第二行：查抄表和开户结算 -->
+                                            <div class="function-button">
+                                                <div class="icon-box enable-icon">
+                                                    <i>表</i>
+                                                </div>
+                                                <div class="function-text">查抄表</div>
+                                            </div>
+                                            <div class="function-button">
+                                                <div class="icon-box account-icon">
+                                                    <i>开</i>
+                                                </div>
+                                                <div class="function-text">开户结算</div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- 表计统计数据移到按钮下方 -->
+                                        <div class="meter-statistics">
+                                            <div class="meter-overview">
+                                                <div class="total-meters">
+                                                    <div class="total-meters-label">表计总数</div>
+                                                    <div class="total-meters-value">
+                                                        <div class="meters-number">186</div>
+                                                        <div class="meters-unit">块</div>
+                                                    </div>
+                                                </div>
+                                                <div class="meter-status">
+                                                    <!-- 第一行：在线、离线、通信未知数 -->
+                                                    <div class="status-row status-main-row">
+                                                        <div class="status-item">
+                                                            <div class="status-label">在线</div>
+                                                            <div class="status-value green">150</div>
+                                                        </div>
+                                                        <div class="status-item">
+                                                            <div class="status-label">离线</div>
+                                                            <div class="status-value red">36</div>
+                                                        </div>
+                                                        <div class="status-item">
+                                                            <div class="status-label">通信未知数</div>
+                                                            <div class="status-value gray">8</div>
+                                                        </div>
+                                                    </div>
+                                                    <!-- 第二行：通、断、通断未知 -->
+                                                    <div class="status-row status-sub-row">
+                                                        <div class="status-item">
+                                                            <div class="status-label">通</div>
+                                                            <div class="status-value green">45</div>
+                                                        </div>
+                                                        <div class="status-item">
+                                                            <div class="status-label">断</div>
+                                                            <div class="status-value red">8</div>
+                                                        </div>
+                                                        <div class="status-item">
+                                                            <div class="status-label">通断未知</div>
+                                                            <div class="status-value gray">16</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 信息卡片部分 -->
+                            <div class="info-cards-container">
+                                <!-- 上排：账户信息和余额信息 -->
+                                <div class="info-row">
+                                    <!-- 账户信息 -->
+                                    <div class="info-grid-card">
+                                        <h3 class="card-title">账户信息</h3>
+                                        <div class="info-cards">
+                                            <div class="info-card blue-gradient">
+                                                <div class="icon-box account-icon">账</div>
+                                                <div class="info-content">
+                                                    <div class="info-label">账户数</div>
+                                                    <div class="info-value-container">
+                                                        <div class="info-value">154</div>
+                                                        <div class="info-unit">个</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="info-card green-gradient">
+                                                <div class="icon-box enable-icon">启</div>
+                                                <div class="info-content">
+                                                    <div class="info-label">启用数</div>
+                                                    <div class="info-value-container">
+                                                        <div class="info-value">132</div>
+                                                        <div class="info-unit">个</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 余额信息 -->
+                                    <div class="info-grid-card">
+                                        <h3 class="card-title">余额信息</h3>
+                                        <div class="info-cards">
+                                            <div class="info-card blue-gradient">
+                                                <div class="icon-box wallet-icon">钱</div>
+                                                <div class="info-content">
+                                                    <div class="info-label">钱包总余额</div>
+                                                    <div class="info-value-container">
+                                                        <div class="info-value">56,789.00</div>
+                                                        <div class="info-unit">元</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="info-card red-gradient">
+                                                <div class="icon-box debt-icon">欠</div>
+                                                <div class="info-content">
+                                                    <div class="info-label">欠费总余额</div>
+                                                    <div class="info-value-container">
+                                                        <div class="info-value">12,456.00</div>
+                                                        <div class="info-unit">元</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 下排：钱包信息和账单信息 -->
+                                <div class="info-row">
+                                    <!-- 钱包信息 - 三个指标 -->
+                                    <div class="info-grid-card">
+                                        <h3 class="card-title">钱包信息</h3>
+                                        <div class="info-cards wallet-cards">
+                                            <div class="info-card green-gradient">
+                                                <div class="icon-box sufficient-icon">充</div>
+                                                <div class="info-content">
+                                                    <div class="info-label">充足</div>
+                                                    <div class="info-value-container">
+                                                        <div class="info-value">96</div>
+                                                        <div class="info-unit">户</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="info-card yellow-gradient">
+                                                <div class="icon-box warning-icon">警</div>
+                                                <div class="info-content">
+                                                    <div class="info-label">预警</div>
+                                                    <div class="info-value-container">
+                                                        <div class="info-value">38</div>
+                                                        <div class="info-unit">户</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="info-card red-gradient">
+                                                <div class="icon-box debt-icon">欠</div>
+                                                <div class="info-content">
+                                                    <div class="info-label">欠费</div>
+                                                    <div class="info-value-container">
+                                                        <div class="info-value">20</div>
+                                                        <div class="info-unit">户</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 账单信息 - 改为故障数 -->
+                                    <div class="info-grid-card">
+                                        <h3 class="card-title">账单信息</h3>
+                                        <div class="info-cards">
+                                            <div class="info-card red-gradient">
+                                                <div class="icon-box fault-icon">故</div>
+                                                <div class="info-content">
+                                                    <div class="info-label">故障数</div>
+                                                    <div class="info-value-container">
+                                                        <div class="info-value">15</div>
+                                                        <div class="info-unit">个</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 第二排：消费信息、充值信息和欠费排行榜 -->
+                        <div class="bottom-row">
+                            <!-- 左侧：消费信息和充值信息 -->
+                            <div class="data-column">
+                                <!-- 消费信息 -->
+                                <div class="data-card">
+                                    <h3 class="card-title">消费信息</h3>
+                                    <div class="consumption-charts">
+                                        <div id="barChart" class="chart-container bar-chart"></div>
+                                        <div id="pieChart" class="chart-container pie-chart"></div>
+                                    </div>
+                                </div>
+
+                                <!-- 充值信息 -->
+                                <div class="data-card">
+                                    <h3 class="card-title">充值信息</h3>
+                                    <div class="consumption-charts">
+                                        <div id="rechargeBarChart" class="chart-container bar-chart"></div>
+                                        <div id="rechargePieChart" class="chart-container pie-chart"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 右侧：欠费排行榜 -->
+                            <div class="data-card debt-ranking">
+                                <h3 class="card-title">钱包欠费TOP10</h3>
+                                <div class="top10-list">
+                                    <div class="top10-item">
+                                        <div class="rank-badge top3">1</div>
+                                        <div class="company-info">
+                                            <div class="company-row">
+                                                <div class="company-name">武汉XX电子科技有限公司</div>
+                                                <div class="debt-amount">67,453<span class="debt-unit">元</span></div>
+                                            </div>
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" style="width: 95%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="top10-item">
+                                        <div class="rank-badge top3">2</div>
+                                        <div class="company-info">
+                                            <div class="company-row">
+                                                <div class="company-name">湖北XX智能装备有限公司</div>
+                                                <div class="debt-amount">45,876<span class="debt-unit">元</span></div>
+                                            </div>
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" style="width: 85%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="top10-item">
+                                        <div class="rank-badge top3">3</div>
+                                        <div class="company-info">
+                                            <div class="company-row">
+                                                <div class="company-name">武汉XX新材料科技有限公司</div>
+                                                <div class="debt-amount">31,254<span class="debt-unit">元</span></div>
+                                            </div>
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" style="width: 70%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="top10-item">
+                                        <div class="rank-badge normal">4</div>
+                                        <div class="company-info">
+                                            <div class="company-row">
+                                                <div class="company-name">武汉XX机械制造有限公司</div>
+                                                <div class="debt-amount">28,963<span class="debt-unit">元</span></div>
+                                            </div>
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" style="width: 65%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="top10-item">
+                                        <div class="rank-badge normal">5</div>
+                                        <div class="company-info">
+                                            <div class="company-row">
+                                                <div class="company-name">武汉XX信息技术有限公司</div>
+                                                <div class="debt-amount">24,781<span class="debt-unit">元</span></div>
+                                            </div>
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" style="width: 55%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- 添加第6-10名 -->
+                                    <div class="top10-item">
+                                        <div class="rank-badge normal">6</div>
+                                        <div class="company-info">
+                                            <div class="company-row">
+                                                <div class="company-name">武汉XX电气设备有限公司</div>
+                                                <div class="debt-amount">20,547<span class="debt-unit">元</span></div>
+                                            </div>
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" style="width: 45%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="top10-item">
+                                        <div class="rank-badge normal">7</div>
+                                        <div class="company-info">
+                                            <div class="company-row">
+                                                <div class="company-name">湖北XX光电科技有限公司</div>
+                                                <div class="debt-amount">18,329<span class="debt-unit">元</span></div>
+                                            </div>
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" style="width: 40%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="top10-item">
+                                        <div class="rank-badge normal">8</div>
+                                        <div class="company-info">
+                                            <div class="company-row">
+                                                <div class="company-name">武汉XX自动化设备有限公司</div>
+                                                <div class="debt-amount">15,624<span class="debt-unit">元</span></div>
+                                            </div>
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" style="width: 35%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="top10-item">
+                                        <div class="rank-badge normal">9</div>
+                                        <div class="company-info">
+                                            <div class="company-row">
+                                                <div class="company-name">武汉XX传感技术有限公司</div>
+                                                <div class="debt-amount">12,831<span class="debt-unit">元</span></div>
+                                            </div>
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" style="width: 28%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="top10-item">
+                                        <div class="rank-badge normal">10</div>
+                                        <div class="company-info">
+                                            <div class="company-row">
+                                                <div class="company-name">武汉XX节能环保有限公司</div>
+                                                <div class="debt-amount">10,257<span class="debt-unit">元</span></div>
+                                            </div>
+                                            <div class="progress-bar">
+                                                <div class="progress-fill" style="width: 22%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+    <!-- 引入 ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 移除导航切换功能, 保持与其他页面一致
+            const navToggle = document.querySelector('.nav-toggle');
+            if (navToggle) {
+                navToggle.style.cursor = 'default';
+                navToggle.classList.add('disabled');
+            }
+            
+            // 确保侧边栏保持展开状态
+            const layout = document.querySelector('.layout');
+            if (layout) {
+                layout.classList.remove('collapsed');
+            }
+            
+            // 初始化消费信息图表
+            initConsumptionCharts();
+            
+            // 初始化充值信息图表
+            initRechargeCharts();
+            
+            // 初始化 AI 助手
+            if (typeof AIAssistant !== 'undefined') {
+                window.aiAssistant = new AIAssistant();
+            }
+        });
+        
+        // 初始化消费信息图表
+        function initConsumptionCharts() {
+            // 确保图表容器正确初始化
+            setTimeout(function() {
+            // 柱状图数据
+            const barChartData = {
+                months: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'],
+                electricity: [180, 260, 450, 320, 290, 380, 0, 0, 0, 0, 0, 0],
+                water: [120, 180, 370, 250, 220, 310, 0, 0, 0, 0, 0, 0]
+            };
+            
+            // 环形图数据
+            const pieChartData = [
+                { name: '用电', value: 690.08, percentage: '65.00%', color: '#29B061' },
+                { name: '用水', value: 420.55, percentage: '35.00%', color: '#1B7EF2' }
+            ];
+            
+            // 初始化柱状图
+            const barChart = echarts.init(document.getElementById('barChart'));
+            
+            // 柱状图配置
+            const barOption = {
+                grid: {
+                    left: '5%',
+                    right: '5%',
+                    bottom: '10%',
+                    top: '15%',
+                    containLabel: true
+                },
+                legend: {
+                    data: ['用电', '用水'],
+                    right: '5%',
+                    top: '0%'
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    data: barChartData.months,
+                    axisLine: {
+                        lineStyle: {
+                            color: '#E0E0E0'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#666'
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '单位（万元）',
+                    nameTextStyle: {
+                        color: '#999',
+                        fontSize: 12
+                    },
+                    axisLine: {
+                        show: false
+                    },
+                    axisLabel: {
+                        color: '#666'
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#F0F0F0'
+                        }
+                    }
+                },
+                series: [
+                    {
+                        name: '用电',
+                        type: 'bar',
+                        barWidth: 10,
+                        itemStyle: {
+                            color: '#29B061'
+                        },
+                        data: barChartData.electricity
+                    },
+                    {
+                        name: '用水',
+                        type: 'bar',
+                        barWidth: 10,
+                        itemStyle: {
+                            color: '#1B7EF2'
+                        },
+                        data: barChartData.water
+                    }
+                ]
+            };
+            
+            // 应用柱状图配置
+            barChart.setOption(barOption);
+            
+            // 初始化环形图
+            const pieChart = echarts.init(document.getElementById('pieChart'));
+            
+            // 环形图配置
+            const pieOption = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c}万元 ({d}%)',
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    borderColor: '#eee',
+                    borderWidth: 1,
+                    padding: [8, 12],
+                    textStyle: {
+                        color: '#333',
+                        fontSize: 12
+                    }
+                },
+                legend: {
+                    show: true,
+                    bottom: '10%',
+                    left: 'center',
+                    itemWidth: 10,
+                    itemHeight: 10,
+                    itemGap: 20,
+                    icon: 'circle',
+                    textStyle: {
+                        fontSize: 12,
+                        color: '#666'
+                    }
+                },
+                color: ['#29B061', '#1B7EF2'],
+                backgroundColor: 'transparent',
+                graphic: {
+                    type: 'text',
+                    left: 'center',
+                    top: 'center',
+                    style: {
+                        text: '合计消费\n1110.63万元',
+                        textAlign: 'center',
+                        fill: '#333',
+                        width: 100,
+                        fontSize: 14,
+                        fontWeight: 'bold',
+                        fontFamily: 'Microsoft YaHei'
+                    },
+                    z: 3
+                },
+                series: [
+                    // 仅保留彩色占比圆环
+                    {
+                        name: '消费占比',
+                        type: 'pie',
+                        radius: ['52%', '68%'],
+                        center: ['50%', '45%'],
+                        avoidLabelOverlap: false,
+                        labelLine: { show: false },
+                        label: {
+                            show: true,
+                            position: 'outside',
+                            formatter: '{b} {d}%',
+                            color: '#666',
+                            fontSize: 12
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: 12,
+                                fontWeight: 'bold'
+                            }
+                        },
+                        data: [
+                            { name: '用电', value: 690.08 },
+                            { name: '用水', value: 420.55 }
+                        ],
+                        z: 2
+                    }
+                ]
+            };
+            
+            // 应用环形图配置
+            pieChart.setOption(pieOption);
+            
+            // 窗口大小变化时自动调整图表大小
+            window.addEventListener('resize', function() {
+                barChart.resize();
+                pieChart.resize();
+            });
+            
+            }, 100); // setTimeout 结束
+        }
+        
+        // 初始化充值信息图表
+        function initRechargeCharts() {
+            // 确保图表容器正确初始化
+            setTimeout(function() {
+            // 趋势图数据
+            const rechargeBarData = {
+                months: ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'],
+                wechat: [65, 85, 125, 95, 110, 145, null, null, null, null, null, null],
+                alipay: [50, 75, 115, 90, 100, 130, null, null, null, null, null, null],
+                unionpay: [35, 50, 80, 65, 70, 85, null, null, null, null, null, null]
+            };
+            
+            // 环形图数据
+            const rechargePieData = [
+                { name: '微信', value: 320.35, percentage: '45.00%', color: '#07C160' },
+                { name: '支付宝', value: 270.57, percentage: '38.00%', color: '#1677FF' },
+                { name: '银联', value: 121.00, percentage: '17.00%', color: '#E60012' }
+            ];
+            
+            // 初始化趋势图
+            const rechargeBarChart = echarts.init(document.getElementById('rechargeBarChart'));
+            
+            // 趋势图配置
+            const rechargeBarOption = {
+                grid: {
+                    left: '5%',
+                    right: '5%',
+                    bottom: '10%',
+                    top: '15%',
+                    containLabel: true
+                },
+                legend: {
+                    data: ['微信', '支付宝', '银联'],
+                    right: '5%',
+                    top: '0%'
+                },
+                tooltip: {
+                    trigger: 'axis'
+                },
+                xAxis: {
+                    type: 'category',
+                    data: rechargeBarData.months,
+                    axisLine: {
+                        lineStyle: {
+                            color: '#E0E0E0'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#666'
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '单位（万元）',
+                    nameTextStyle: {
+                        color: '#999',
+                        fontSize: 12
+                    },
+                    axisLine: {
+                        show: false
+                    },
+                    axisLabel: {
+                        color: '#666'
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#F0F0F0'
+                        }
+                    }
+                },
+                series: [
+                    {
+                        name: '微信',
+                        type: 'line',
+                        smooth: true,
+                        symbolSize: 6,
+                        connectNulls: true,
+                        lineStyle: {
+                            width: 3
+                        },
+                        itemStyle: {
+                            color: '#07C160'
+                        },
+                        data: rechargeBarData.wechat
+                    },
+                    {
+                        name: '支付宝',
+                        type: 'line',
+                        smooth: true,
+                        symbolSize: 6,
+                        connectNulls: true,
+                        lineStyle: {
+                            width: 3
+                        },
+                        itemStyle: {
+                            color: '#1677FF'
+                        },
+                        data: rechargeBarData.alipay
+                    },
+                    {
+                        name: '银联',
+                        type: 'line',
+                        smooth: true,
+                        symbolSize: 6,
+                        connectNulls: true,
+                        lineStyle: {
+                            width: 3
+                        },
+                        itemStyle: {
+                            color: '#E60012'
+                        },
+                        data: rechargeBarData.unionpay
+                    }
+                ]
+            };
+            
+            // 应用趋势图配置
+            rechargeBarChart.setOption(rechargeBarOption);
+            
+            // 初始化环形图
+            const rechargePieChart = echarts.init(document.getElementById('rechargePieChart'));
+            
+            // 环形图配置
+            const rechargePieOption = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c}万元 ({d}%)',
+                    backgroundColor: 'rgba(255,255,255,0.95)',
+                    borderColor: '#eee',
+                    borderWidth: 1,
+                    padding: [8, 12],
+                    textStyle: {
+                        color: '#333',
+                        fontSize: 12
+                    }
+                },
+                legend: {
+                    show: true,
+                    bottom: '10%',
+                    left: 'center',
+                    itemWidth: 10,
+                    itemHeight: 10,
+                    itemGap: 20,
+                    icon: 'circle',
+                    textStyle: {
+                        fontSize: 12,
+                        color: '#666'
+                    }
+                },
+                color: ['#07C160', '#1677FF', '#E60012'],
+                backgroundColor: 'transparent',
+                graphic: {
+                    type: 'text',
+                    left: 'center',
+                    top: 'center',
+                    style: {
+                        text: '合计充值\n711.92万元',
+                        textAlign: 'center',
+                        fill: '#333',
+                        width: 100,
+                        fontSize: 14,
+                        fontWeight: 'bold',
+                        fontFamily: 'Microsoft YaHei'
+                    },
+                    z: 3
+                },
+                series: [
+                    // 仅保留彩色占比圆环
+                    {
+                        name: '充值占比',
+                        type: 'pie',
+                        radius: ['52%', '68%'],
+                        center: ['50%', '45%'],
+                        avoidLabelOverlap: false,
+                        labelLine: { show: false },
+                        label: {
+                            show: true,
+                            position: 'outside',
+                            formatter: '{b} {d}%',
+                            color: '#666',
+                            fontSize: 12
+                        },
+                        emphasis: {
+                            label: {
+                                show: true,
+                                fontSize: 12,
+                                fontWeight: 'bold'
+                            }
+                        },
+                        data: [
+                            { name: '微信', value: 320.35 },
+                            { name: '支付宝', value: 270.57 },
+                            { name: '银联', value: 121.00 }
+                        ],
+                        z: 2
+                    }
+                ]
+            };
+            
+            // 应用环形图配置
+            rechargePieChart.setOption(rechargePieOption);
+            
+            // 窗口大小变化时自动调整图表大小
+            window.addEventListener('resize', function() {
+                rechargeBarChart.resize();
+                rechargePieChart.resize();
+            });
+            
+            }, 100); // setTimeout 结束
+        }
+    </script>
+    
+    <!-- 添加 AI 助手脚本引用 -->
+    <script src="js/ai-assistant.js"></script>
+</body>
+</html> 

@@ -1,0 +1,38 @@
+.App {
+  text-align: center;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+  margin-bottom: 20px;
+}
+
+.App-header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.App-header p {
+  margin: 10px 0 0;
+  font-size: 1rem;
+  opacity: 0.8;
+}
+
+.App-main {
+  flex: 1;
+  padding: 0 20px;
+}
+
+.App-footer {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-top: 1px solid #ddd;
+  margin-top: 30px;
+  color: #666;
+  font-size: 0.9rem;
+} 

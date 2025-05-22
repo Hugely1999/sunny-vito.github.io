@@ -1,0 +1,3605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://api.deepseek.com; img-src 'self' data: blob:; connect-src 'self' https://api.deepseek.com blob:; worker-src 'self' blob:; media-src 'self' blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com;">
+    <meta http-equiv="Access-Control-Allow-Origin" content="*">
+    <title>抄表录入信息</title>
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <!-- 先引入Vue -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <!-- 再引入Element UI -->
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <!-- 引入Tesseract.js用于OCR识别 -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+    <!-- 替换为更稳定的2.x版本，并预加载模型 -->
+    <script>
+        // 预定义Tesseract加载状态
+        window.tesseractLoaded = false;
+        window.tesseractError = null;
+        
+        // 页面加载后检测Tesseract是否可用
+        window.addEventListener('DOMContentLoaded', function() {
+            if (typeof Tesseract !== 'undefined') {
+                console.log('Tesseract.js 已成功加载，版本:', Tesseract.version);
+                window.tesseractLoaded = true;
+                
+                // 预加载语言模型
+                try {
+                    console.log('开始预加载语言模型');
+                    Tesseract.createWorker()
+                        .then(worker => {
+                            console.log('Worker 创建成功，预加载语言模型');
+                            return worker.loadLanguage('chi_sim+eng')
+                                .then(() => {
+                                    console.log('语言模型预加载成功');
+                                    worker.terminate();
+                                })
+                                .catch(err => {
+                                    console.warn('语言模型预加载失败，将在实际使用时加载:', err);
+                                });
+                        })
+                        .catch(err => {
+                            console.warn('Worker 创建失败:', err);
+                        });
+                } catch (e) {
+                    console.warn('预加载初始化失败:', e);
+                }
+            } else {
+                console.error('Tesseract.js 加载失败');
+                window.tesseractError = '无法加载OCR识别库';
+            }
+        });
+    </script>
+    <!-- 引入SheetJS库用于Excel文件解析 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --color-fill-lighter: #F6F8FA;
+            --color-text-regular: #424E5F;
+            --color-text-secondary: #798492;
+            --color-border: #E5E6EB;
+            --color-primary: #00B45E;
+            --color-danger: #F53F3F;
+            --color-placeholder: #A4ADB8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        .popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .popup-container {
+            background: #FFFFFF;
+            border-radius: 12px;
+            box-shadow: 0px 8px 10px -5px rgba(0, 0, 0, 0.08),
+                        0px 16px 24px 2px rgba(0, 0, 0, 0.04),
+                        0px 6px 30px 5px rgba(0, 0, 0, 0.05);
+            width: 960px;
+            min-height: 600px;
+            max-height: 800px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .popup-header {
+            padding: 15px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--color-border);
+            flex-shrink: 0;
+        }
+
+        .popup-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--color-text-regular);
+        }
+
+        .popup-close {
+            cursor: pointer;
+            color: var(--color-text-secondary);
+        }
+
+        .popup-content {
+            padding: 8px;
+            background: #F0F2F5;
+            min-height: 400px;
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .content-wrapper {
+            background: #FFFFFF;
+            border-radius: 8px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .table-container {
+            flex: 1;
+            overflow-y: auto;
+            margin: 0 24px 24px;
+            min-height: 300px;
+        }
+
+        .add-row {
+            margin: 24px 24px 16px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .add-row button {
+            background: var(--color-primary);
+            color: #FFFFFF;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .meters-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .meters-table th {
+            background: var(--color-fill-lighter);
+            padding: 13px 24px;
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--color-text-secondary);
+            text-align: left;
+            border-bottom: 1px solid #F3F5F7;
+        }
+
+        .meters-table td {
+            padding: 10px 16px;
+            border-bottom: 1px solid #F3F5F7;
+        }
+
+        .meters-table .el-input {
+            width: 100%;
+        }
+
+        .delete-btn {
+            color: var(--color-danger);
+            cursor: pointer;
+            background: none;
+            border: none;
+            font-size: 14px;
+        }
+
+        .popup-footer {
+            padding: 12px;
+            text-align: right;
+            border-top: 1px solid var(--color-border);
+            flex-shrink: 0;
+        }
+
+        .popup-footer button {
+            margin-left: 8px;
+            padding: 6px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .btn-cancel {
+            background: #FFFFFF;
+            border: 1px solid var(--color-border);
+            color: var(--color-text-secondary);
+        }
+
+        .btn-confirm {
+            background: var(--color-primary);
+            border: none;
+            color: #FFFFFF;
+        }
+
+        .btn-confirm:disabled {
+            background: #C0C4CC;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 20px;
+            color: var(--color-text-secondary);
+        }
+
+        /* AI助理抽屉样式 */
+        .ai-assistant-drawer {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 420px;
+            background: #FFFFFF;
+            box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--color-border);
+        }
+
+        .ai-assistant-drawer.closed {
+            transform: translateX(100%);
+        }
+
+        .drawer-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .drawer-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--color-text-regular);
+        }
+
+        .drawer-close {
+            cursor: pointer;
+            color: var(--color-text-secondary);
+        }
+
+        .drawer-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            background-color: #FCFCFC;
+        }
+        
+        .message-image {
+            margin: 8px 0;
+            border-radius: 8px;
+            overflow: hidden;
+            max-width: 100%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .message-image img {
+            max-width: 100%;
+            display: block;
+        }
+
+        .assistant-description {
+            background: #F6F8FA;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            line-height: 1.6;
+        }
+
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 16px;
+            padding: 8px;
+        }
+
+        .chat-message {
+            margin-bottom: 16px;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .chat-message.user {
+            margin-left: auto;
+            background: #E8F8F0;
+            border-radius: 12px 2px 12px 12px;
+            padding: 10px 14px;
+            color: var(--color-text-regular);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            margin-bottom: 16px;
+        }
+
+        .chat-message.ai {
+            background: #F6F8FA;
+            border-radius: 2px 12px 12px 12px;
+            padding: 10px 14px;
+            color: var(--color-text-regular);
+            display: flex;
+            align-items: flex-start;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            margin-bottom: 16px;
+        }
+        
+        .ai-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            margin-right: 12px;
+            flex-shrink: 0;
+            background-color: #fff;
+            overflow: hidden;
+        }
+        
+        .ai-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .message-content {
+            flex: 1;
+            word-break: break-word;
+            padding: 4px 0;
+        }
+
+        .input-area {
+            border-top: 1px solid var(--color-border);
+            padding: 16px;
+            background-color: #F9FAFB;
+        }
+
+        .input-container {
+            display: flex;
+            position: relative;
+        }
+
+        .input-field {
+            flex: 1;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 10px 40px 10px 12px;
+            resize: none;
+            outline: none;
+            font-family: inherit;
+            font-size: 15px;
+            min-height: 42px;
+            max-height: 120px;
+            line-height: 1.5;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .input-actions {
+            display: flex;
+            margin-top: 8px;
+            justify-content: space-between;
+        }
+
+        .input-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--color-text-secondary);
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+            position: relative;
+        }
+
+        .input-button:hover {
+            color: var(--color-primary);
+        }
+
+        .input-button.recording {
+            color: var(--color-danger);
+            background-color: rgba(245, 63, 63, 0.1);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        
+        /* 上传按钮提示 */
+        .input-button .tooltip {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        
+        .input-button:hover .tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(245, 63, 63, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(245, 63, 63, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(245, 63, 63, 0);
+            }
+        }
+
+        /* 验证状态图标 */
+        .validation-icon {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            z-index: 10;
+            font-size: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+        }
+        
+        .validation-icon.valid {
+            background-color: var(--color-primary);
+            color: white;
+        }
+        
+        .validation-icon.error {
+            background-color: var(--color-danger);
+            color: white;
+        }
+
+        /* 正确输入样式 */
+        .input-valid {
+            border-color: var(--color-primary) !important;
+            background-color: rgba(0, 180, 94, 0.05) !important; 
+            box-shadow: 0 0 0 1px rgba(0, 180, 94, 0.2) !important; 
+        }
+        
+        /* 错误提示样式 */
+        .input-error {
+            border-color: var(--color-danger) !important;
+            background-color: rgba(245, 63, 63, 0.05) !important; 
+            box-shadow: 0 0 0 1px rgba(245, 63, 63, 0.2) !important; 
+        }
+
+        .send-button {
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 16px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            box-shadow: 0 2px 4px rgba(0, 180, 94, 0.2);
+            transition: all 0.2s ease;
+        }
+        
+        .send-button:hover {
+            background: #00a054;
+            box-shadow: 0 3px 6px rgba(0, 180, 94, 0.3);
+        }
+
+        /* 新录入数据标记样式 */
+        .new-data-badge {
+            display: inline-block;
+            background: #FF7D00;
+            color: white;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 8px;
+            font-weight: normal;
+        }
+
+        .error-message {
+            color: var(--color-danger);
+            font-size: 12px;
+            margin-top: 4px;
+            position: absolute;
+            white-space: nowrap;
+        }
+
+        /* 抽屉切换按钮 */
+        .drawer-toggle {
+            position: absolute;
+            top: 50%;
+            right: 400px;
+            transform: translateY(-50%);
+            background: var(--color-primary);
+            color: white;
+            border: none;
+            width: 24px;
+            height: 60px;
+            border-radius: 4px 0 0 4px;
+            cursor: pointer;
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: right 0.3s ease;
+        }
+
+        .drawer-toggle.closed {
+            right: 0;
+        }
+
+        /* 文件上传样式 */
+        .file-input {
+            display: none;
+        }
+
+        .upload-preview {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 6px 0;
+        }
+
+        .upload-item {
+            position: relative;
+            width: 70px;
+            height: 70px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--color-border);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .upload-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .upload-item .remove {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 10px;
+        }
+
+        .upload-file {
+            width: 100%;
+            padding: 4px 8px;
+            background: #F6F8FA;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .upload-file .remove {
+            color: var(--color-danger);
+            cursor: pointer;
+        }
+
+        /* 行高亮动画 */
+        @keyframes highlight {
+            0% { background-color: rgba(0, 180, 94, 0.2); }
+            50% { background-color: rgba(0, 180, 94, 0.1); }
+            100% { background-color: transparent; }
+        }
+        
+        /* 添加和删除按钮样式 */
+        .btn-delete {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: var(--color-danger);
+            color: white;
+            border: none;
+            cursor: pointer;
+            margin-right: 8px;
+            font-size: 16px;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn-add {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: var(--color-primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .text-delete-btn {
+            color: var(--color-danger);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .text-delete-btn:hover {
+            background-color: rgba(245, 63, 63, 0.1);
+            border-radius: 4px;
+        }
+
+        /* 文件上传提示样式 */
+        .upload-tooltip {
+            position: absolute;
+            bottom: 55px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            white-space: nowrap;
+        }
+        
+        .input-button:hover .upload-tooltip {
+            opacity: 1;
+        }
+        
+        /* 文件类型标签 */
+        .file-type-badge {
+            display: inline-block;
+            font-size: 10px;
+            padding: 1px 4px;
+            border-radius: 3px;
+            margin-left: 5px;
+            color: white;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 3px;
+        }
+        
+        .confidence-high {
+            background-color: #67C23A; /* 绿色 */
+        }
+        
+        .confidence-medium {
+            background-color: #E6A23C; /* 黄色 */
+        }
+        
+        .confidence-low {
+            background-color: #F56C6C; /* 红色 */
+        }
+    </style>
+</head>
+<body>
+    <div class="popup-overlay" id="meterApp">
+        <div class="popup-container">
+            <div class="popup-header">
+                <h3 class="popup-title">录入抄表信息</h3>
+                <span class="popup-close" @click="closePopup">×</span>
+            </div>
+            <div class="popup-content">
+                <div class="content-wrapper">
+                    <div class="add-row">
+                        <button id="addRowBtn" @click="addRow" class="el-button el-button--primary" style="display: flex; align-items: center; gap: 5px;">
+                            <span style="font-size: 16px;">+</span>
+                            <span>添加行</span>
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table class="meters-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px">序号</th>
+                                    <th style="width: 120px">表计回路名称</th>
+                                    <th style="width: 120px">所属账户</th>
+                                    <th style="width: 100px">门牌号</th>
+                                    <th style="width: 80px">变比</th>
+                                    <th style="width: 160px">抄表时间</th>
+                                    <th style="width: 100px">本次读数</th>
+                                    <th style="width: 80px">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody">
+                                <tr v-for="(row, index) in tableData" :key="row.id">
+                                    <td style="width: 40px; text-align: center;">{{index + 1}}</td>
+                                    <td>
+                                        <div style="position: relative;">
+                                            <el-input 
+                                                v-model="row.name" 
+                                                placeholder="请输入" 
+                                                :class="{'input-error': row.errors && row.errors.name, 'input-valid': row.valid && row.valid.name}">
+                                            </el-input>
+                                            <div v-if="row.errors && row.errors.name" class="error-message">{{row.errors.name}}</div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="position: relative;">
+                                            <el-input 
+                                                v-model="row.account" 
+                                                placeholder="请输入"
+                                                :class="{'input-error': row.errors && row.errors.account, 'input-valid': row.valid && row.valid.account}">
+                                            </el-input>
+                                            <div v-if="row.errors && row.errors.account" class="error-message">{{row.errors.account}}</div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="position: relative;">
+                                            <el-input 
+                                                v-model="row.doorNumber" 
+                                                placeholder="请输入"
+                                                :class="{'input-error': row.errors && row.errors.doorNumber, 'input-valid': row.valid && row.valid.doorNumber}">
+                                            </el-input>
+                                            <div v-if="row.errors && row.errors.doorNumber" class="error-message">{{row.errors.doorNumber}}</div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="position: relative;">
+                                            <el-input 
+                                                v-model="row.ratio" 
+                                                placeholder="请输入"
+                                                :class="{'input-error': row.errors && row.errors.ratio, 'input-valid': row.valid && row.valid.ratio}">
+                                            </el-input>
+                                            <div v-if="row.errors && row.errors.ratio" class="error-message">{{row.errors.ratio}}</div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="position: relative;">
+                                            <el-date-picker
+                                                v-model="row.time"
+                                                type="datetime"
+                                                placeholder="选择日期时间"
+                                                format="yyyy-MM-dd HH:mm"
+                                                :class="{'input-error': row.errors && row.errors.time, 'input-valid': row.valid && row.valid.time}">
+                                            </el-date-picker>
+                                            <div v-if="row.errors && row.errors.time" class="error-message">{{row.errors.time}}</div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div style="position: relative;">
+                                            <el-input 
+                                                v-model="row.reading" 
+                                                placeholder="请输入"
+                                                :class="{'input-error': row.errors && row.errors.reading, 'input-valid': row.valid && row.valid.reading}">
+                                            </el-input>
+                                            <div v-if="row.errors && row.errors.reading" class="error-message">{{row.errors.reading}}</div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <button class="text-delete-btn" @click="deleteRow(index)">删除</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- AI助理抽屉切换按钮 -->
+                <button class="drawer-toggle" :class="{'closed': !isDrawerOpen}" @click="toggleDrawer">
+                    <span v-if="isDrawerOpen">›</span>
+                    <span v-else>‹</span>
+                </button>
+                
+                <!-- AI助理抽屉 -->
+                <div class="ai-assistant-drawer" :class="{'closed': !isDrawerOpen}">
+                    <div class="drawer-header">
+                        <div class="drawer-title">AI助理</div>
+                        <span class="drawer-close" @click="toggleDrawer">×</span>
+                    </div>
+                    <div class="drawer-content">
+                        <div class="chat-container" ref="chatContainer">
+                            <div v-for="(message, index) in chatMessages" :key="index" 
+                                class="chat-message" :class="message.type">
+                                <div v-if="message.type === 'ai'" class="ai-avatar">
+                                    <img src="images/ai-assistant-icon.caf3479d.jpg" alt="AI Avatar" onerror="this.src='data:image/svg+xml;charset=utf-8,%3Csvg xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22 viewBox%3D%220 0 32 32%22 fill%3D%22%23fff%22%3E%3Cpath d%3D%22M16 8a8 8 0 00-7.9 9.4A5.4 5.4 0 0013 24v-4a4 4 0 118 0v4a5.4 5.4 0 004.9-6.6A8 8 0 0016 8z%22%2F%3E%3C%2Fsvg%3E';">
+                                </div>
+                                <div class="message-content">
+                                    <div v-if="message.type === 'ai' && message.imageUrl" class="message-image">
+                                        <img :src="message.imageUrl" alt="Uploaded Image">
+                                    </div>
+                                {{message.content}}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="input-area">
+                            <div class="input-container">
+                                <textarea 
+                                    class="input-field" 
+                                    v-model="userInput"
+                                    placeholder="输入问题或指令..."
+                                    @keyup.enter.ctrl="sendMessage"
+                                    ref="inputField"
+                                ></textarea>
+                            </div>
+                            
+                            <div class="input-actions">
+                                <div class="input-buttons">
+                                    <button class="input-button" @click="startVoiceInput" title="语音输入">
+                                        <i class="el-icon-microphone"></i>
+                                        <span class="tooltip">点击开始语音输入，再次点击结束</span>
+                                    </button>
+                                    <input type="file" class="file-input" ref="imageInput" accept="image/*" @change="handleImageUpload" multiple>
+                                    <button class="input-button" @click="openImageUpload" title="上传图片">
+                                        <i class="el-icon-picture"></i>
+                                        <span class="tooltip">上传图片识别表计信息</span>
+                                    </button>
+                                    <input type="file" class="file-input" ref="fileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv" @change="handleFileUpload">
+                                    <button class="input-button" @click="openFileUpload" title="上传文件">
+                                        <i class="el-icon-document"></i>
+                                        <span class="tooltip">上传Excel等文件解析数据</span>
+                                    </button>
+                                </div>
+                                <button class="send-button" @click="sendMessage">发送</button>
+                            </div>
+                            
+                            <div class="upload-preview" v-if="uploads.length > 0">
+                                <div v-for="(item, index) in uploads" :key="index" class="upload-item" v-if="item.type === 'image'">
+                                    <img :src="item.url" alt="上传预览">
+                                    <div class="remove" @click="removeUpload(index)">×</div>
+                                </div>
+                                <div v-for="(item, index) in uploads" :key="'file-'+index" class="upload-file" v-if="item.type === 'file'">
+                                    <span>{{item.name}}</span>
+                                    <span class="remove" @click="removeUpload(index)">×</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="popup-footer">
+                <button class="btn-cancel" @click="closePopup">取消</button>
+                <button class="btn-confirm" @click="validateAndSubmit" :disabled="!canSubmit">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 确保页面加载完成后执行
+        document.addEventListener('DOMContentLoaded', function() {
+            // 手动初始化Vue应用
+            window.app = new Vue({
+                el: '#meterApp',
+                data: {
+                    tableData: [],
+                    isDrawerOpen: true,
+                    userInput: '',
+                    chatMessages: [
+                        {
+                            type: 'ai',
+                            content: '您好，我是您的智能助理。您可以：\n1. 输入文字信息\n2. 点击麦克风按钮进行语音输入\n3. 上传表计图片\n4. 上传Excel文件\n我会自动识别表计信息并填充表格~'
+                        }
+                    ],
+                    isProcessing: false,
+                    isProcessingOCR: false,
+                    uploadType: null,
+                    uploads: [],
+                    apiBaseUrl: '.',
+                    endpoints: {
+                        textParse: '/api/text/parse',
+                        imageOcr: '/api/image/ocr',
+                        documentParse: '/api/document/parse'
+                    },
+                    isRecording: false,
+                    fieldsRegex: {
+                        name: /表计(?:回路)?名称[：:]*\s*([^，,。\n]+)|(?:电表|表计|回路)[^，,。\n]*?名称[：:]*\s*([^，,。\n]+)|(?:电表|表计|回路)[^，,。\n]*?(?:为|是)[：:]*\s*([^，,。\n]+)|电表[号#]?\s*(\d+[号#]?)|(?:\s|^)中电(\d+)号?|\b中电\s*[:：]?\s*(\d+)\b|\b(中电\d+)\b/,
+                        account: /(?:所属)?账户[：:]*\s*([^，,。\n]+)|(?:户主|用户|客户|住户|业主)(?:为|是)?[：:]*\s*([^，,。\n]+)|(?:账户|业主)[：:]?\s*([^，,。\n]+)|\b([a-zA-Z0-9]+(?:室|户|单元|房|店铺|店))\b/,
+                        doorNumber: /门牌号[：:]*\s*([^，,。\n]+)|(?:房间|门|房|室)号[：:]*\s*([^，,。\n]+)|(?:住址|地址)[：:]?\s*([^，,。\n]+)|(\d+[室户单元层号])/,
+                        ratio: /变比[：:]*\s*([^，,。\n]+)|(?:倍率|比率|比例)[：:]*\s*([^，,。\n]+)|(?:^|\s)(\d+)[\/:](\d+)(?:\s|$)/,
+                        time: /抄表时间[：:]*\s*([^，,。\n]+)|抄表时间\s*(\d{4}[-年][\d\.月]+[\d日][\d\s:]+)|(?:抄表)?日期[：:]*\s*([^，,。\n]+)|(\d{4}[-\/\.年]\d{1,2}[-\/\.月]\d{1,2}[日号]?(?:\s*\d{1,2}[:时]\d{1,2}[:分]?(?:\d{1,2}[秒]?)?)?)|(\d{1,2}月\d{1,2}日\s*\d{1,2}[:时]\d{1,2}[:分]?(?:\d{1,2}[秒]?)?)/,
+                        reading: /本次读数\s*(\d+(?:\.\d+)?)|读数(?:为)?[：:]*\s*([^，,。\n]+)|(?:示数|数值|计量|用电量)(?:为)?[：:]*\s*([^，,。\n]+)|(?:电表|表计|仪表)[^，,。\n]*?(?:读数|示数|数值)[：:]?\s*([^，,。\n]+)|(?:^|\s)(\d+(?:\.\d+)?)\s*(?:度|千瓦时|kWh|kw|KW)(?:\s|$)/
+                    }
+                },
+                computed: {
+                    canSubmit() {
+                        return this.tableData.length > 0 && 
+                            this.tableData.some(row => {
+                                return row.name && row.reading;
+                            });
+                    },
+                    hasImageUploads() {
+                        return this.uploads.some(item => item.type === 'image');
+                    },
+                    hasFileUploads() {
+                        return this.uploads.some(item => item.type === 'file');
+                    }
+                },
+                // 生命周期钩子
+                created() {
+                    console.log('Vue实例已创建');
+                    
+                    // 监控Tesseract库是否加载
+                    if (typeof Tesseract === 'undefined') {
+                        console.error('Tesseract库未成功加载，OCR功能可能不可用');
+                    } else {
+                        console.log('Tesseract库已成功加载，版本:', Tesseract.version || '未知');
+                    }
+                },
+                mounted() {
+                    // 初始化添加一行空数据
+                    this.addEmptyRow();
+                    console.log('Vue实例已挂载，初始表格数据已添加');
+                    
+                    // 初始化提示信息
+                    this.$nextTick(() => {
+                        this.$message({
+                            message: '系统已准备就绪，可以通过文本或图片录入表计信息',
+                            type: 'success',
+                            duration: 3000
+                        });
+                    });
+                },
+                methods: {
+                    // 添加行
+                    addRow() {
+                        this.addEmptyRow();
+                        this.$message({
+                            message: '已添加新行',
+                            type: 'success',
+                            duration: 1000
+                        });
+                    },
+                    
+                    // 添加空行
+                    addEmptyRow() {
+                        const rowId = Date.now() + Math.floor(Math.random() * 1000);
+                        this.tableData.push({
+                            id: rowId,
+                            name: '',
+                            account: '',
+                            doorNumber: '',
+                            ratio: '',
+                            time: '',
+                            reading: ''
+                        });
+                    },
+                    
+                    // 删除行
+                    deleteRow(index) {
+                        this.tableData.splice(index, 1);
+                        if (this.tableData.length === 0) {
+                            this.addEmptyRow();
+                        }
+                    },
+                    
+                    // 切换抽屉
+                    toggleDrawer() {
+                        this.isDrawerOpen = !this.isDrawerOpen;
+                    },
+                    
+                    // 滚动聊天窗口到底部
+                    scrollChatToBottom() {
+                        if (this.$refs.chatContainer) {
+                            this.$refs.chatContainer.scrollTop = this.$refs.chatContainer.scrollHeight;
+                        }
+                    },
+                    
+                    // 验证并提交
+                    validateAndSubmit() {
+                        // 过滤掉空行
+                        const validRows = this.tableData.filter(row => {
+                            return row.name || row.account || row.doorNumber || 
+                                  row.ratio || row.time || row.reading;
+                        });
+                        
+                        if (validRows.length === 0) {
+                            this.$message.error('没有有效的数据可提交');
+                            return;
+                        }
+                        
+                        this.submitDataToParent();
+                    },
+                    
+                    // 提交数据到父窗口
+                    submitDataToParent() {
+                        // 过滤掉空行
+                        const validRows = this.tableData.filter(row => {
+                            return row.name || row.account || row.doorNumber || 
+                                  row.ratio || row.time || row.reading;
+                        });
+                        
+                        if (validRows.length === 0) {
+                            this.$message.error('没有有效的数据可提交');
+                            return;
+                        }
+                        
+                        // 处理数据格式
+                        const formattedData = validRows.map(row => {
+                            // 如果表计名称不是以"电表"开头，自动添加
+                            let circuitName = row.name || '';
+                            if (circuitName && !circuitName.startsWith('电表')) {
+                                circuitName = '电表' + circuitName;
+                            } else if (!circuitName) {
+                                // 生成默认表计名称
+                                circuitName = `电表${Date.now() % 1000}号`;
+                            }
+                            
+                            // 如果电表名称不以"号"结尾，添加"号"
+                            if (circuitName && !circuitName.endsWith('号')) {
+                                circuitName += '号';
+                            }
+                            
+                            // 确保reading是有效数字
+                            let reading = row.reading || '0';
+                            if (isNaN(parseFloat(reading))) {
+                                reading = '0';
+                            }
+                            
+                            return {
+                                circuitName: circuitName,
+                                accountName: row.account || '',
+                                roomNumber: row.doorNumber || '',
+                                ratio: row.ratio || '1.0',
+                                readTime: row.time ? this.formatDateTime(row.time) : this.formatDateTime(new Date()),
+                                reading: reading,
+                                isNew: true
+                            };
+                        });
+                        
+                        // 确保至少有一条记录有效
+                        const hasValidData = formattedData.some(item => 
+                            parseFloat(item.reading) > 0 || item.accountName || item.roomNumber);
+                            
+                        if (!hasValidData) {
+                            this.$message.error('请输入有效的表计数据');
+                            return;
+                        }
+                        
+                        console.log('提交的数据:', formattedData);
+                        
+                        // 发送数据到父窗口
+                        window.parent.postMessage({
+                            type: 'submitData',
+                            data: formattedData
+                        }, '*');
+                        
+                        this.$message.success('提交成功');
+                        
+                        // 关闭弹窗
+                        setTimeout(() => {
+                            this.closePopup();
+                        }, 1000);
+                    },
+                    
+                    // 关闭弹窗
+                    closePopup() {
+                        window.parent.postMessage({
+                            type: 'closePopup'
+                        }, '*');
+                    },
+                    
+                    // 格式化日期时间
+                    formatDateTime(dateStr) {
+                        if (!dateStr) {
+                            return new Date().toISOString().slice(0, 19).replace('T', ' ');
+                        }
+                        
+                        try {
+                            // 预处理日期字符串
+                            let processedDateStr = dateStr.toString().trim();
+                            
+                            // 处理混合格式 "2025-02月12日01:00"
+                            if (/\d{4}-\d{1,2}月\d{1,2}日/.test(processedDateStr)) {
+                                processedDateStr = processedDateStr.replace(/(\d{4})-(\d{1,2})月(\d{1,2})日/, '$1-$2-$3');
+                            }
+                            
+                            // 处理中文日期格式
+                            if (/\d{4}年\d{1,2}月\d{1,2}日/.test(processedDateStr)) {
+                                processedDateStr = processedDateStr.replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/, '$1-$2-$3');
+                            }
+                            
+                            // 处理中文时间
+                            if (/\d{1,2}时\d{1,2}分/.test(processedDateStr)) {
+                                processedDateStr = processedDateStr.replace(/(\d{1,2})时(\d{1,2})分/, '$1:$2');
+                            }
+                            
+                            // 处理简单的月日格式："02-12 01:00"，需要添加当前年份
+                            if (/^\d{1,2}[-\/\.]\d{1,2}\s/.test(processedDateStr)) {
+                                const currentYear = new Date().getFullYear();
+                                processedDateStr = `${currentYear}-${processedDateStr}`;
+                            }
+                            
+                            // 尝试将字符串转换为日期对象
+                            let dateObj;
+                            if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(processedDateStr)) {
+                                // 仅日期格式: YYYY-MM-DD
+                                dateObj = new Date(processedDateStr + 'T00:00:00');
+                            } else if (/^\d{4}-\d{1,2}-\d{1,2}\s\d{1,2}:\d{1,2}(:\d{1,2})?$/.test(processedDateStr)) {
+                                // 日期时间格式: YYYY-MM-DD HH:MM:SS 或 YYYY-MM-DD HH:MM
+                                dateObj = new Date(processedDateStr.replace(' ', 'T'));
+                            } else {
+                                // 尝试原生解析
+                                dateObj = new Date(processedDateStr);
+                            }
+                            
+                            // 检查是否为有效日期
+                            if (isNaN(dateObj.getTime())) {
+                                console.warn('无法解析日期:', dateStr);
+                                return new Date().toISOString().slice(0, 19).replace('T', ' ');
+                            }
+                            
+                            // 格式化为YYYY-MM-DD HH:MM:SS
+                            return dateObj.toISOString().slice(0, 19).replace('T', ' ');
+                        } catch (error) {
+                            console.error('日期格式化错误:', error);
+                            return new Date().toISOString().slice(0, 19).replace('T', ' ');
+                        }
+                    },
+                    
+                    // 发送消息
+                    sendMessage() {
+                        if (!this.userInput.trim() && !this.uploads.length) {
+                            return;
+                        }
+                        
+                        // 添加用户消息内容
+                        let userContent = this.userInput.trim();
+                        if (this.uploads.length > 0) {
+                            const imageCount = this.uploads.filter(item => item.type === 'image').length;
+                            const fileCount = this.uploads.filter(item => item.type === 'file').length;
+                            
+                            let uploadDescription = '';
+                            if (imageCount > 0) {
+                                uploadDescription += `${imageCount}张图片`;
+                            }
+                            if (fileCount > 0) {
+                                uploadDescription += uploadDescription ? `和${fileCount}个文件` : `${fileCount}个文件`;
+                            }
+                            
+                            userContent += userContent ? ` (已上传${uploadDescription})` : `(已上传${uploadDescription})`;
+                        }
+                        
+                        // 添加用户消息到对话
+                        this.chatMessages.push({
+                            type: 'user',
+                            content: userContent
+                        });
+                        
+                        // 如果有图片，将第一张图片添加到AI消息中
+                        let aiImageUrl = '';
+                        if (this.uploads.length > 0 && this.uploads[0].type === 'image') {
+                            aiImageUrl = this.uploads[0].url;
+                        }
+                        
+                        // 添加AI等待消息
+                        this.chatMessages.push({
+                            type: 'ai',
+                            content: '正在处理您的请求...',
+                            imageUrl: aiImageUrl
+                        });
+                        
+                        // 确保消息显示
+                        this.$nextTick(() => {
+                            this.scrollChatToBottom();
+                        });
+                        
+                        // 保存当前AI消息索引
+                        const aiMsgIndex = this.chatMessages.length - 1;
+                        
+                        // 处理上传的图片和文件
+                        const hasImages = this.uploads.some(item => item.type === 'image');
+                        const hasFiles = this.uploads.some(item => item.type === 'file' && ['xlsx', 'xls', 'csv'].includes(item.name.split('.').pop().toLowerCase()));
+                        
+                        // 优先处理图片
+                        if (hasImages) {
+                                // 更新AI消息
+                                this.$set(this.chatMessages, aiMsgIndex, {
+                                    type: 'ai',
+                                content: '正在处理上传的图片，识别文本内容...'
+                            });
+                            
+                            // 收集所有图片文件
+                            const imageFiles = this.uploads
+                                .filter(item => item.type === 'image')
+                                .map(item => item.file);
+                                
+                            // 显示图片处理中
+                            this.$message({
+                                message: '图片识别处理中，请耐心等待...',
+                                type: 'info',
+                                duration: 3000
+                            });
+                            
+                            // 预处理每个图片然后进行OCR识别
+                            Promise.all(imageFiles.map(file => this.preprocessImage(file)))
+                                .then(processedFiles => {
+                                    console.log('图片预处理完成，开始OCR识别');
+                                    
+                                    // 创建Promise数组，处理每一个预处理后的图片
+                                    const ocrPromises = processedFiles.map(file => this.processImageOCR(file));
+                                    
+                                    console.log(`开始处理${ocrPromises.length}张预处理后的图片OCR识别`);
+                                    
+                                    // 添加更新进度显示
+                                    if (aiMsgIndex !== -1) {
+                                        this.$set(this.chatMessages, aiMsgIndex, {
+                                            type: 'ai',
+                                            content: '图片预处理完成，开始OCR识别文本...',
+                                            imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                                        });
+                                    }
+                                    
+                                    // 处理所有图片OCR结果
+                                    return Promise.all(ocrPromises);
+                                })
+                                .then(results => {
+                                    console.log('所有OCR处理结果:', results);
+                                    
+                                    // 提取所有文本
+                                    let allText = '';
+                                    let allOcrText = '';
+                                    
+                                    // 检查是否有成功识别的结果
+                                    const successResults = results.filter(r => r && r.success && r.rawText && r.rawText.trim() !== '');
+                                    
+                                    if (successResults.length === 0) {
+                                        // 没有成功识别的结果
+                                        this.$set(this.chatMessages, aiMsgIndex, {
+                                            type: 'ai',
+                                            content: '无法从图片中识别出有效文本，请尝试上传更清晰的图片，或者直接在输入框中输入表计信息。'
+                                        });
+                                        
+                                        // 清空上传和输入
+                                        this.uploads = [];
+                                        this.userInput = '';
+                                        return;
+                                    }
+                                    
+                                    results.forEach((result, index) => {
+                                        if (result && result.rawText) {
+                                            if (index > 0) {
+                                                allText += '\n\n';
+                                                allOcrText += '\n\n--- 图片' + (index + 1) + ' ---\n\n';
+                                            }
+                                            allText += result.rawText;
+                                            allOcrText += result.rawText;
+                                        }
+                                    });
+                                    
+                                    // 合并用户输入和OCR文本
+                                    if (this.userInput.trim()) {
+                                        allText = this.userInput.trim() + '\n\n' + allText;
+                                    }
+                                    
+                                    // 更新AI消息，显示OCR识别的文本
+                                    this.$set(this.chatMessages, aiMsgIndex, {
+                                        type: 'ai',
+                                        content: '已识别到以下文本内容：\n\n' + allOcrText,
+                                        imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                                    });
+                                    
+                                    // 确保滚动到底部显示结果
+                                    this.$nextTick(() => {
+                                        this.scrollChatToBottom();
+                                    });
+                                    
+                                    // 添加一条AI消息，表示开始结构化解析
+                                    this.chatMessages.push({
+                                        type: 'ai',
+                                        content: '正在使用AI分析表计信息，请稍候...'
+                                    });
+                                    
+                                    // 保存新消息索引
+                                    const parseIndex = this.chatMessages.length - 1;
+                                    
+                                    // 调用DeepSeek API进行结构化抽取
+                                    this.extractMeterInfoByDeepSeek(allText)
+                                        .then(multiRecords => {
+                                            console.log('结构化解析结果:', multiRecords);
+                                            
+                                            // 检查解析结果
+                                            if (multiRecords && multiRecords.length > 0) {
+                                                // 构建响应消息
+                                                let resultMessage = `成功识别到 ${multiRecords.length} 条表计信息:\n\n`;
+                                                
+                                                // 填充多条记录到表格
+                                                multiRecords.forEach((record, idx) => {
+                                                    resultMessage += `【记录 ${idx + 1}】\n`;
+                                                    
+                                                    // 格式化显示记录详情
+                                                    if (record.name) resultMessage += `表计回路名称: ${record.name}\n`;
+                                                    if (record.account) resultMessage += `所属账户: ${record.account}\n`;
+                                                    if (record.doorNumber) resultMessage += `门牌号: ${record.doorNumber}\n`;
+                                                    if (record.ratio) resultMessage += `变比: ${record.ratio}\n`;
+                                                    if (record.time) resultMessage += `抄表时间: ${record.time}\n`;
+                                                    if (record.reading) resultMessage += `本次读数: ${record.reading}\n`;
+                                                    
+                                                    resultMessage += '\n';
+                                                    
+                                                    // 为每条记录找一个空行并填充
+                                                    const rowIndex = this.findEmptyRowIndex();
+                                                    this.fillTableData(record, rowIndex);
+                                                });
+                                                
+                                                // 更新AI消息
+                                                this.$set(this.chatMessages, parseIndex, {
+                                                    type: 'ai',
+                                                    content: resultMessage
+                                                });
+                                                
+                                                // 确保滚动到底部显示结果
+                                                this.$nextTick(() => {
+                                                    this.scrollChatToBottom();
+                                                });
+                                                
+                                                // 显示成功消息
+                                                this.$message({
+                                                    message: `已自动填充 ${multiRecords.length} 条表计信息`,
+                                                    type: 'success',
+                                                    duration: 3000
+                                                });
+                                            } else {
+                                                // 解析失败
+                                                this.$set(this.chatMessages, parseIndex, {
+                                                    type: 'ai',
+                                                    content: '无法从图片中提取有效的表计信息，请尝试手动录入或上传更清晰的图片'
+                                                });
+                                            }
+                                            
+                                            // 清空上传和输入
+                                            this.uploads = [];
+                                            this.userInput = '';
+                                        })
+                                        .catch(error => {
+                                            console.error('结构化解析错误:', error);
+                                            
+                                            // 更新AI消息
+                                            this.$set(this.chatMessages, parseIndex, {
+                                                type: 'ai',
+                                                content: `解析表计信息时出错: ${error.message || '未知错误'}。请尝试手动输入表计信息。`
+                                            });
+                                            
+                                            // 清空上传和输入
+                                            this.uploads = [];
+                                            this.userInput = '';
+                                        });
+                                })
+                                .catch(error => {
+                                    console.error('图片预处理或OCR初始化错误:', error);
+                                    // 更新AI消息 - 出错
+                                    this.$set(this.chatMessages, aiMsgIndex, {
+                                        type: 'ai',
+                                        content: `图片处理过程中出现错误: ${error.message || '未知错误'}。请尝试上传其他图片或手动输入信息。`,
+                                        imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                                    });
+                                    
+                                    // 显示错误通知
+                                    this.$message.error(`图片处理失败: ${error.message || '未知错误'}`);
+                                    
+                                    // 清空上传和输入
+                                    this.uploads = [];
+                                    this.userInput = '';
+                                    return Promise.reject(error); // 确保错误传递
+                                });
+                                
+                            return;
+                        }
+                        // 处理Excel文件
+                        else if (hasFiles) {
+                            // 找到Excel文件
+                            const excelFile = this.uploads.find(item => 
+                                item.type === 'file' && 
+                                ['xlsx', 'xls', 'csv'].includes(item.name.split('.').pop().toLowerCase())
+                            );
+                            
+                            if (excelFile) {
+                                this.processExcelFile(excelFile.file);
+                                
+                                // 清空上传和输入
+                                this.uploads = [];
+                                this.userInput = '';
+                                return;
+                            }
+                        }
+                        
+                        // 处理用户输入文本（可能来自OCR或直接输入）
+                        if (this.userInput.trim()) {
+                            console.log('处理文本输入:', this.userInput);
+                            
+                            // 尝试解析输入文本
+                            const parseResult = this.parseUserInput(this.userInput);
+                            console.log('文本解析结果:', parseResult);
+                            
+                            // 处理单个或多个记录
+                            if (parseResult.success) {
+                                // 检查是否有多条记录
+                                if (parseResult.isMultiple && parseResult.allRecords && parseResult.allRecords.length > 1) {
+                                    console.log('检测到多条记录数据');
+                                    
+                                    // 获取多条记录
+                                    const multiRecords = parseResult.allRecords;
+                                    
+                                    // 更新AI消息
+                                    let resultMessage = `已识别到 ${multiRecords.length} 条表计信息:\n\n`;
+                                    
+                                    multiRecords.forEach((record, idx) => {
+                                        resultMessage += `记录 ${idx + 1}:\n`;
+                                        Object.entries(record).forEach(([key, value]) => {
+                                            if (value) {
+                                                let fieldName = '';
+                                                switch(key) {
+                                                    case 'name': fieldName = '表计回路名称'; break;
+                                                    case 'account': fieldName = '所属账户'; break;
+                                                    case 'doorNumber': fieldName = '门牌号'; break;
+                                                    case 'ratio': fieldName = '变比'; break;
+                                                    case 'time': fieldName = '抄表时间'; break;
+                                                    case 'reading': fieldName = '本次读数'; break;
+                                                }
+                                                
+                                                if (fieldName) {
+                                                    resultMessage += `${fieldName}: ${value}\n`;
+                                                }
+                                            }
+                                        });
+                                        resultMessage += '\n';
+                                    });
+                                    
+                                    // 更新AI消息
+                                    this.$set(this.chatMessages, aiMsgIndex, {
+                                        type: 'ai',
+                                        content: resultMessage
+                                    });
+                                    
+                                    // 添加数据到表格
+                                    multiRecords.forEach(record => {
+                                        const rowIndex = this.findEmptyRowIndex();
+                                        this.fillTableData(record, rowIndex);
+                                    });
+                                } else {
+                                    // 单条记录处理
+                                    
+                                    // 尝试批量解析多行记录（作为备用方案）
+                                    const multiRecords = this.parseMultipleRecords(this.userInput);
+                                    
+                                    if (multiRecords.length > 1) {
+                                        console.log('从文本中识别到多条记录:', multiRecords);
+                                        
+                                        // 更新AI消息
+                                        let resultMessage = `已识别到 ${multiRecords.length} 条表计信息:\n\n`;
+                                        
+                                        multiRecords.forEach((record, idx) => {
+                                            resultMessage += `记录 ${idx + 1}:\n`;
+                                            Object.entries(record).forEach(([key, value]) => {
+                                                if (value) {
+                                                    let fieldName = '';
+                                                    switch(key) {
+                                                        case 'name': fieldName = '表计回路名称'; break;
+                                                        case 'account': fieldName = '所属账户'; break;
+                                                        case 'doorNumber': fieldName = '门牌号'; break;
+                                                        case 'ratio': fieldName = '变比'; break;
+                                                        case 'time': fieldName = '抄表时间'; break;
+                                                        case 'reading': fieldName = '本次读数'; break;
+                                                    }
+                                                    
+                                                    if (fieldName) {
+                                                        resultMessage += `${fieldName}: ${value}\n`;
+                                                    }
+                                                }
+                                            });
+                                            resultMessage += '\n';
+                                        });
+                                        
+                                        // 更新AI消息
+                                        this.$set(this.chatMessages, aiMsgIndex, {
+                                            type: 'ai',
+                                            content: resultMessage,
+                                            imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                                        });
+                                        
+                                        // 添加数据到表格
+                                        multiRecords.forEach(record => {
+                                            const rowIndex = this.findEmptyRowIndex();
+                                            this.fillTableData(record, rowIndex);
+                                        });
+                                    } else {
+                                        // 构建响应消息，展示识别到的信息
+                                        let responseMsg = '已识别到以下表计信息:\n\n';
+                                        const record = parseResult.data;
+                                        
+                                        Object.entries(record).forEach(([key, value]) => {
+                                            if (value) {
+                                                let fieldName = '';
+                                                switch(key) {
+                                                    case 'name': fieldName = '表计回路名称'; break;
+                                                    case 'account': fieldName = '所属账户'; break;
+                                                    case 'doorNumber': fieldName = '门牌号'; break;
+                                                    case 'ratio': fieldName = '变比'; break;
+                                                    case 'time': fieldName = '抄表时间'; break;
+                                                    case 'reading': fieldName = '本次读数'; break;
+                                                }
+                                                
+                                                if (fieldName) {
+                                                    responseMsg += `${fieldName}: ${value}\n`;
+                                                }
+                                            }
+                                        });
+                                        
+                                        // 更新AI消息
+                                        this.$set(this.chatMessages, aiMsgIndex, {
+                                            type: 'ai',
+                                            content: responseMsg,
+                                            imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                                });
+                                
+                                // 添加到表格
+                                const rowIndex = this.findEmptyRowIndex();
+                                        this.fillTableData(record, rowIndex);
+                                    }
+                                }
+                            } else {
+                                // 更新AI消息
+                                this.$set(this.chatMessages, aiMsgIndex, {
+                                    type: 'ai',
+                                    content: '未能识别出有效的表计信息，请尝试更清晰的表述',
+                                    imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                                });
+                            }
+                        } else {
+                            // 既没有文本也没有图片，保持AI等待消息
+                            this.$set(this.chatMessages, aiMsgIndex, {
+                                type: 'ai',
+                                content: '未提供任何文本信息，请输入表计信息或上传图片',
+                                imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                            });
+                        }
+                        
+                        // 清空输入和上传
+                        this.userInput = '';
+                        this.uploads = [];
+                    },
+                    
+                    // 语音输入
+                    startVoiceInput() {
+                        // 检查浏览器是否支持语音识别
+                        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                            this.$message.error('您的浏览器不支持语音识别功能，请使用Chrome或Edge浏览器');
+                            return;
+                        }
+                        
+                        // 如果已经在录音，则停止录音
+                        if (this.isRecording) {
+                            if (this.recognition) {
+                                this.recognition.stop();
+                            }
+                            return;
+                        }
+                        
+                        try {
+                            // 创建语音识别对象
+                            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                            this.recognition = new SpeechRecognition();
+                            
+                            // 配置
+                            this.recognition.lang = 'zh-CN'; // 设置语言为中文
+                            this.recognition.continuous = false; // 不持续录音
+                            this.recognition.interimResults = true; // 允许临时结果
+                            this.recognition.maxAlternatives = 1; // 最多返回一个备选结果
+                            
+                            // 开始录音
+                            this.isRecording = true;
+                            
+                            // 更新按钮样式
+                            const micButton = document.querySelector('.el-icon-microphone').parentNode;
+                            if (micButton) {
+                                micButton.classList.add('recording');
+                            }
+                            
+                            // 添加一条消息，表示开始录音
+                            this.chatMessages.push({
+                                type: 'ai',
+                                content: '正在录音，请说出表计信息...'
+                            });
+                            
+                            // 滚动到底部
+                            this.$nextTick(() => {
+                                this.scrollChatToBottom();
+                            });
+                            
+                            // 保存当前AI消息索引
+                            const recordingMsgIndex = this.chatMessages.length - 1;
+                            
+                            // 初始结果文本
+                            let finalTranscript = '';
+                            let interimTranscript = '';
+                            
+                            // 录音中结果处理
+                            this.recognition.onresult = (event) => {
+                                interimTranscript = '';
+                                
+                                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                                    if (event.results[i].isFinal) {
+                                        finalTranscript += event.results[i][0].transcript;
+                                    } else {
+                                        interimTranscript += event.results[i][0].transcript;
+                                    }
+                                }
+                                
+                                // 更新AI消息，显示临时结果
+                                if (recordingMsgIndex !== -1) {
+                                    this.$set(this.chatMessages, recordingMsgIndex, {
+                                        type: 'ai',
+                                        content: `正在录音: ${finalTranscript}${interimTranscript ? `...${interimTranscript}` : ''}`
+                                    });
+                                    
+                                    // 滚动到底部
+                                    this.scrollChatToBottom();
+                                }
+                            };
+                            
+                            // 录音结束
+                            this.recognition.onend = () => {
+                                this.isRecording = false;
+                                
+                                // 更新按钮样式
+                                const micButton = document.querySelector('.el-icon-microphone').parentNode;
+                                if (micButton) {
+                                    micButton.classList.remove('recording');
+                                }
+                                
+                                // 如果有识别结果
+                                if (finalTranscript) {
+                                    // 更新AI消息
+                                    this.$set(this.chatMessages, recordingMsgIndex, {
+                                        type: 'ai',
+                                        content: `语音识别结果:\n${finalTranscript}`
+                                    });
+                                    
+                                    // 添加用户消息
+                                    this.chatMessages.push({
+                                        type: 'user',
+                                        content: finalTranscript
+                                    });
+                                    
+                                    // 使用DeepSeek API处理识别结果
+                                    this.extractMeterInfoByDeepSeek(finalTranscript)
+                                        .then(multiRecords => {
+                                            console.log('语音识别结构化解析结果:', multiRecords);
+                                            
+                                            // 添加AI消息，显示结构化结果
+                                            const aiMsg = {
+                                                type: 'ai',
+                                                content: '正在处理语音识别结果...'
+                                            };
+                                            this.chatMessages.push(aiMsg);
+                                            const aiMsgIndex = this.chatMessages.length - 1;
+                                            
+                                            // 检查解析结果
+                                            if (multiRecords && multiRecords.length > 0) {
+                                                // 构建响应消息
+                                                let resultMessage = `成功从语音中识别到 ${multiRecords.length} 条表计信息:\n\n`;
+                                                
+                                                // 填充多条记录到表格
+                                                multiRecords.forEach((record, idx) => {
+                                                    resultMessage += `【记录 ${idx + 1}】\n`;
+                                                    
+                                                    // 格式化显示记录详情
+                                                    if (record.name) resultMessage += `表计回路名称: ${record.name}\n`;
+                                                    if (record.account) resultMessage += `所属账户: ${record.account}\n`;
+                                                    if (record.doorNumber) resultMessage += `门牌号: ${record.doorNumber}\n`;
+                                                    if (record.ratio) resultMessage += `变比: ${record.ratio}\n`;
+                                                    if (record.time) resultMessage += `抄表时间: ${record.time}\n`;
+                                                    if (record.reading) resultMessage += `本次读数: ${record.reading}\n`;
+                                                    
+                                                    resultMessage += '\n';
+                                                    
+                                                    // 为每条记录找一个空行并填充
+                                                    const rowIndex = this.findEmptyRowIndex();
+                                                    this.fillTableData(record, rowIndex);
+                                                });
+                                                
+                                                // 更新AI消息
+                                                this.$set(this.chatMessages, aiMsgIndex, {
+                                                    type: 'ai',
+                                                    content: resultMessage
+                                                });
+                                                
+                                                // 显示成功消息
+                                                this.$message({
+                                                    message: `已自动填充 ${multiRecords.length} 条表计信息`,
+                                                    type: 'success',
+                                                    duration: 3000
+                                                });
+                                            } else {
+                                                // 解析失败
+                                                this.$set(this.chatMessages, aiMsgIndex, {
+                                                    type: 'ai',
+                                                    content: '未能从语音中提取有效的表计信息，请尝试更清晰的语音输入或手动输入'
+                                                });
+                                            }
+                                            
+                                            // 滚动到底部
+                                            this.$nextTick(() => {
+                                                this.scrollChatToBottom();
+                                            });
+                                        })
+                                        .catch(error => {
+                                            console.error('语音识别结构化解析错误:', error);
+                                            
+                                            // 添加错误消息
+                                            this.chatMessages.push({
+                                                type: 'ai',
+                                                content: `语音处理过程中出现错误: ${error.message || '未知错误'}`
+                                            });
+                                            
+                                            // 滚动到底部
+                                            this.$nextTick(() => {
+                                                this.scrollChatToBottom();
+                                            });
+                                        });
+                                } else {
+                                    // 没有识别结果
+                                    this.$set(this.chatMessages, recordingMsgIndex, {
+                                        type: 'ai',
+                                        content: '未能识别到语音，请重试或尝试其他输入方式'
+                                    });
+                                }
+                                
+                                // 滚动到底部
+                                this.scrollChatToBottom();
+                            };
+                            
+                            // 错误处理
+                            this.recognition.onerror = (event) => {
+                                console.error('语音识别错误:', event.error);
+                                this.isRecording = false;
+                                
+                                // 更新按钮样式
+                                const micButton = document.querySelector('.el-icon-microphone').parentNode;
+                                if (micButton) {
+                                    micButton.classList.remove('recording');
+                                }
+                                
+                                // 显示错误消息
+                                if (recordingMsgIndex !== -1) {
+                                    this.$set(this.chatMessages, recordingMsgIndex, {
+                                        type: 'ai',
+                                        content: `语音识别出错: ${event.error}`
+                                    });
+                                }
+                                
+                                // 显示错误通知
+                                this.$message.error(`语音识别失败: ${event.error}`);
+                            };
+                            
+                            // 开始录音
+                            this.recognition.start();
+                            
+                        } catch (error) {
+                            console.error('启动语音识别失败:', error);
+                            this.isRecording = false;
+                            this.$message.error(`语音识别功能出错: ${error.message}`);
+                        }
+                    },
+                    
+                    // 打开图片上传
+                    openImageUpload() {
+                        this.$refs.imageInput.click();
+                    },
+                    
+                    // 处理图片上传
+                    handleImageUpload(event) {
+                        const files = event.target.files;
+                        if (!files || files.length === 0) return;
+                        
+                        console.log('上传的图片文件:', files);
+                        
+                        // 验证文件类型和大小
+                        const validFiles = Array.from(files).filter(file => {
+                            // 检查是否是图片
+                            if (!file.type.startsWith('image/')) {
+                                this.$message.error(`文件 ${file.name} 不是有效的图片格式`);
+                                return false;
+                            }
+                            
+                            // 检查文件大小，限制为10MB
+                            if (file.size > 10 * 1024 * 1024) {
+                                this.$message.error(`文件 ${file.name} 超过10MB限制`);
+                                return false;
+                            }
+                            
+                            return true;
+                        });
+                        
+                        if (validFiles.length === 0) {
+                            this.$message.error('没有有效的图片文件上传');
+                            return;
+                        }
+                        
+                        // 仅添加到上传列表，不立即处理
+                        validFiles.forEach(file => {
+                            // 创建预览URL
+                            const previewUrl = URL.createObjectURL(file);
+                            
+                            this.uploads.push({
+                                type: 'image',
+                                file: file,
+                                url: previewUrl,
+                                name: file.name
+                            });
+                        });
+                        
+                        this.$refs.imageInput.value = '';
+                        
+                        // 显示上传完成提示
+                        this.$message({
+                            message: `已添加${validFiles.length}张图片，点击发送按钮开始OCR识别处理`,
+                            type: 'success',
+                            duration: 3000
+                        });
+                        
+                        // 聚焦到输入框，等待用户点击发送
+                        this.$nextTick(() => {
+                            if (this.$refs.inputField) {
+                                this.$refs.inputField.focus();
+                            }
+                        });
+                    },
+                    
+                    // 打开文件上传
+                    openFileUpload() {
+                        this.$refs.fileInput.click();
+                    },
+                    
+                    // 处理文件上传
+                    handleFileUpload(event) {
+                        const file = event.target.files[0];
+                        if (!file) return;
+                        
+                        this.uploads.push({
+                            type: 'file',
+                            file: file,
+                            name: file.name
+                        });
+                        
+                        this.$refs.fileInput.value = '';
+                        
+                        // 如果是Excel文件，处理解析
+                        const fileExt = file.name.split('.').pop().toLowerCase();
+                        if (['xlsx', 'xls', 'csv'].includes(fileExt)) {
+                            this.processExcelFile(file);
+                        } else {
+                            this.$message({
+                                message: '已上传文件，但暂不支持自动解析该类型文件',
+                                type: 'warning'
+                            });
+                        }
+                    },
+                    
+                    // 处理Excel文件
+                    processExcelFile(file) {
+                                                        // 添加用户消息
+                                this.chatMessages.push({
+                                    type: 'user',
+                                    content: `已上传Excel文件: ${file.name}`
+                                });
+                                
+                                // 添加AI等待消息
+                                this.chatMessages.push({
+                                    type: 'ai',
+                                    content: '正在解析Excel文件，请稍候...'
+                                });
+                                
+                                // 确保消息显示
+                                this.$nextTick(() => {
+                                    this.scrollChatToBottom();
+                                });
+                        
+                        // 确保消息显示
+                        this.$nextTick(() => {
+                            this.scrollChatToBottom();
+                        });
+                        
+                        // 保存当前AI消息索引
+                        const aiMsgIndex = this.chatMessages.length - 1;
+                        
+                        // 使用FileReader读取文件
+                        const reader = new FileReader();
+                        
+                        reader.onload = (e) => {
+                            try {
+                                // 解析Excel文件
+                                const data = new Uint8Array(e.target.result);
+                                const workbook = XLSX.read(data, { type: 'array' });
+                                
+                                // 获取第一个工作表
+                                const firstSheetName = workbook.SheetNames[0];
+                                const worksheet = workbook.Sheets[firstSheetName];
+                                
+                                // 转换为JSON
+                                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+                                
+                                console.log('Excel解析结果:', jsonData);
+                                
+                                // 尝试识别表头
+                                let headerRow = -1;
+                                let dataRows = [];
+                                const headerKeywords = ['表计', '电表', '名称', '账户', '门牌', '变比', '抄表', '读数'];
+                                
+                                // 查找表头行
+                                for (let i = 0; i < Math.min(10, jsonData.length); i++) {
+                                    const row = jsonData[i];
+                                    if (!row || !row.length) continue;
+                                    
+                                    const rowText = row.join(' ');
+                                    let keywordMatches = 0;
+                                    
+                                    // 检查有多少关键词匹配
+                                    headerKeywords.forEach(keyword => {
+                                        if (rowText.includes(keyword)) keywordMatches++;
+                                    });
+                                    
+                                    // 如果匹配数量足够，认为是表头
+                                    if (keywordMatches >= 3) {
+                                        headerRow = i;
+                                        break;
+                                    }
+                                }
+                                
+                                // 如果找到表头，处理数据行
+                                if (headerRow >= 0) {
+                                    // 获取表头
+                                    const headers = jsonData[headerRow];
+                                    
+                                    // 获取表头列索引
+                                    const columnIndices = {
+                                        name: -1,
+                                        account: -1,
+                                        doorNumber: -1,
+                                        ratio: -1,
+                                        time: -1,
+                                        reading: -1
+                                    };
+                                    
+                                    // 匹配表头列
+                                    headers.forEach((header, index) => {
+                                        if (!header) return;
+                                        
+                                        const headerText = header.toString().toLowerCase();
+                                        
+                                        if (headerText.includes('表计') || headerText.includes('电表') || headerText.includes('名称') || headerText.includes('回路')) {
+                                            columnIndices.name = index;
+                                        } else if (headerText.includes('账户') || headerText.includes('户主') || headerText.includes('客户')) {
+                                            columnIndices.account = index;
+                                        } else if (headerText.includes('门牌') || headerText.includes('房间') || headerText.includes('单元')) {
+                                            columnIndices.doorNumber = index;
+                                        } else if (headerText.includes('变比') || headerText.includes('倍率')) {
+                                            columnIndices.ratio = index;
+                                        } else if (headerText.includes('时间') || headerText.includes('日期')) {
+                                            columnIndices.time = index;
+                                        } else if (headerText.includes('读数') || headerText.includes('示数') || headerText.includes('电量')) {
+                                            columnIndices.reading = index;
+                                        }
+                                    });
+                                    
+                                    // 处理数据行
+                                    for (let i = headerRow + 1; i < jsonData.length; i++) {
+                                        const row = jsonData[i];
+                                        if (!row || !row.length) continue;
+                                        
+                                        // 检查行是否有足够数据
+                                        let hasData = false;
+                                        for (let j = 0; j < row.length; j++) {
+                                            if (row[j] && row[j].toString().trim() !== '') {
+                                                hasData = true;
+                                                break;
+                                            }
+                                        }
+                                        
+                                        if (!hasData) continue;
+                                        
+                                        // 创建记录
+                                        const record = {};
+                                        
+                                        // 填充记录
+                                        if (columnIndices.name >= 0 && row[columnIndices.name]) {
+                                            record.name = row[columnIndices.name].toString().trim();
+                                        }
+                                        
+                                        if (columnIndices.account >= 0 && row[columnIndices.account]) {
+                                            record.account = row[columnIndices.account].toString().trim();
+                                        }
+                                        
+                                        if (columnIndices.doorNumber >= 0 && row[columnIndices.doorNumber]) {
+                                            record.doorNumber = row[columnIndices.doorNumber].toString().trim();
+                                        }
+                                        
+                                        if (columnIndices.ratio >= 0 && row[columnIndices.ratio]) {
+                                            record.ratio = row[columnIndices.ratio].toString().trim();
+                                        }
+                                        
+                                        if (columnIndices.time >= 0 && row[columnIndices.time]) {
+                                            record.time = row[columnIndices.time].toString().trim();
+                                        }
+                                        
+                                        if (columnIndices.reading >= 0 && row[columnIndices.reading]) {
+                                            record.reading = row[columnIndices.reading].toString().trim();
+                                        }
+                                        
+                                        // 检查记录是否有有效数据
+                                        if (Object.keys(record).some(key => record[key])) {
+                                            dataRows.push(record);
+                                        }
+                                    }
+                                } else {
+                                    // 没有找到明确的表头，尝试从每行提取信息
+                                    for (let i = 0; i < jsonData.length; i++) {
+                                        const row = jsonData[i];
+                                        if (!row || !row.length) continue;
+                                        
+                                        // 将行转换为文本进行处理
+                                        const rowText = row.join(' ');
+                                        const record = this.extractRecord(rowText);
+                                        
+                                        // 检查是否提取到有效信息
+                                        if (Object.keys(record).some(key => record[key])) {
+                                            dataRows.push(record);
+                                        }
+                                    }
+                                }
+                                
+                                // 处理结果
+                                console.log('提取到的数据行:', dataRows);
+                                
+                                if (dataRows.length > 0) {
+                                    // 构建消息
+                                    let resultMessage = `已从Excel文件中提取到 ${dataRows.length} 条表计信息:\n\n`;
+                                    
+                                    dataRows.forEach((record, idx) => {
+                                        resultMessage += `记录 ${idx + 1}:\n`;
+                                        Object.entries(record).forEach(([key, value]) => {
+                                            if (value) {
+                                                let fieldName = '';
+                                                switch(key) {
+                                                    case 'name': fieldName = '表计回路名称'; break;
+                                                    case 'account': fieldName = '所属账户'; break;
+                                                    case 'doorNumber': fieldName = '门牌号'; break;
+                                                    case 'ratio': fieldName = '变比'; break;
+                                                    case 'time': fieldName = '抄表时间'; break;
+                                                    case 'reading': fieldName = '本次读数'; break;
+                                                }
+                                                
+                                                if (fieldName) {
+                                                    resultMessage += `${fieldName}: ${value}\n`;
+                                                }
+                                            }
+                                        });
+                                        resultMessage += '\n';
+                                    });
+                                    
+                                    // 更新AI消息
+                                    this.$set(this.chatMessages, aiMsgIndex, {
+                                        type: 'ai',
+                                        content: resultMessage
+                                    });
+                                    
+                                    // 填充表格
+                                    setTimeout(() => {
+                                        dataRows.forEach(record => {
+                                            const rowIndex = this.findEmptyRowIndex();
+                                            this.fillTableData(record, rowIndex);
+                                        });
+                                        
+                                        this.$message({
+                                            message: `已自动填充Excel中的${dataRows.length}条表计信息`,
+                                            type: 'success',
+                                            duration: 3000
+                                        });
+                                    }, 500);
+                                } else {
+                                    // 未提取到有效数据
+                                    this.$set(this.chatMessages, aiMsgIndex, {
+                                        type: 'ai',
+                                        content: '已解析Excel文件，但未能识别出有效的表计信息，请检查文件格式是否正确',
+                                        imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                                    });
+                                }
+                            } catch (error) {
+                                console.error('Excel文件解析错误:', error);
+                                this.$set(this.chatMessages, aiMsgIndex, {
+                                    type: 'ai',
+                                    content: 'Excel文件解析过程中出现错误，请确保文件格式正确',
+                                    imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                                });
+                            }
+                        };
+                        
+                                                    reader.onerror = () => {
+                            console.error('文件读取错误');
+                            this.$set(this.chatMessages, aiMsgIndex, {
+                                type: 'ai',
+                                content: '文件读取失败，请重新上传',
+                                imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                            });
+                        };
+                        
+                        // 读取文件
+                        reader.readAsArrayBuffer(file);
+                    },
+                    
+                    // 移除上传
+                    removeUpload(index) {
+                        if (this.uploads[index].url) {
+                            URL.revokeObjectURL(this.uploads[index].url);
+                        }
+                        this.uploads.splice(index, 1);
+                    },
+                    
+                    // 查找空行索引
+                    findEmptyRowIndex() {
+                        const emptyIndex = this.tableData.findIndex(row => 
+                            !row.name && !row.account && !row.doorNumber && 
+                            !row.ratio && !row.time && !row.reading
+                        );
+                        
+                        if (emptyIndex >= 0) return emptyIndex;
+                        
+                        this.addEmptyRow();
+                        return this.tableData.length - 1;
+                    },
+                    
+                    // 填充表格数据
+                    fillTableData(data, index) {
+                        console.log('填充表格数据:', data, '到行:', index);
+                        
+                        // 确保表格行存在
+                        if (!this.tableData[index]) {
+                            console.error('行索引无效:', index);
+                            this.addEmptyRow();
+                            index = this.tableData.length - 1;
+                        }
+                        
+                        // 填充数据
+                        try {
+                            // 预处理表计名称 - 只保留实际名称部分
+                            if (data.name) {
+                                let nameValue = data.name.trim();
+                                
+                                // 彻底移除表计名称前的所有标签
+                                nameValue = nameValue.replace(/^(表计回路名称|表计名称|回路名称|表计回路|电表名称|表计回路|表计|电表)[:：]?\s*/ig, '');
+                                nameValue = nameValue.replace(/^电表\s*[:：]?\s*/ig, '');
+                                
+                                // 处理"中电"特殊格式
+                                if (nameValue.match(/^(中电\s*[:：]?\s*\d+)/)) {
+                                    nameValue = nameValue.replace(/^中电\s*[:：]?\s*/i, '中电');
+                                }
+                                
+                                // 处理"电表123号"格式，提取数字部分
+                                if (nameValue.match(/^电表\d+号?/)) {
+                                    const numMatch = nameValue.match(/电表(\d+号?)/);
+                                    if (numMatch) {
+                                        nameValue = numMatch[1];
+                                    }
+                                }
+                                
+                                this.$set(this.tableData[index], 'name', nameValue);
+                                console.log('填充表计名称:', nameValue);
+                            }
+                            
+                            // 预处理账户信息 - 只保留实际账户
+                            if (data.account) {
+                                let accountValue = data.account.trim();
+                                // 彻底移除账户前的标签
+                                accountValue = accountValue.replace(/^(所属账户|账户名称|户主|用户名|账户|客户|住户|业主|用户|账号)[:：]?\s*/ig, '');
+                                
+                                this.$set(this.tableData[index], 'account', accountValue);
+                                console.log('填充账户:', accountValue);
+                            }
+                            
+                            // 预处理门牌号 - 只保留号码
+                            if (data.doorNumber) {
+                                let doorValue = data.doorNumber.trim();
+                                // 彻底移除门牌号前的标签
+                                doorValue = doorValue.replace(/^(门牌号|房间号|单元号|门号|房号|住址|地址|房间|单元|房屋)[:：]?\s*/ig, '');
+                                
+                                this.$set(this.tableData[index], 'doorNumber', doorValue);
+                                console.log('填充门牌号:', doorValue);
+                            }
+                            
+                            // 预处理变比 - 只保留数字
+                            if (data.ratio) {
+                                let ratioValue = data.ratio.trim();
+                                // 彻底移除变比前的标签
+                                ratioValue = ratioValue.replace(/^(变比|倍率|比率|比例)[:：]?\s*/ig, '');
+                                
+                                // 处理分数表示形式 (如 1/2 → 0.5)
+                                if (ratioValue.includes('/')) {
+                                    const parts = ratioValue.split('/');
+                                    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) && parseFloat(parts[1]) !== 0) {
+                                        ratioValue = (parseFloat(parts[0]) / parseFloat(parts[1])).toString();
+                                    }
+                                }
+                                
+                                this.$set(this.tableData[index], 'ratio', ratioValue);
+                                console.log('填充变比:', ratioValue);
+                            }
+                            
+                            // 预处理时间 - 尝试多种格式解析
+                            if (data.time) {
+                                let timeValue = data.time.trim();
+                                console.log('处理时间字段:', timeValue);
+                                
+                                // 彻底移除时间前的标签
+                                timeValue = timeValue.replace(/^(抄表时间|日期|时间|抄表日期)[:：]?\s*/ig, '');
+                                
+                                try {
+                                    // 首先进行特殊情况处理
+                                    // 处理"2025-02月12日01:00"这样的混合格式
+                                    if (/\d{4}-\d{1,2}月\d{1,2}日/.test(timeValue)) {
+                                        timeValue = timeValue
+                                            .replace(/(\d{4})-(\d{1,2})月(\d{1,2})日/, '$1-$2-$3')
+                                            .replace(/(\d{1,2}):(\d{1,2})/, ' $1:$2');
+                                        console.log('特殊格式时间转换后:', timeValue);
+                                    }
+                                    
+                                    // 处理中文日期格式"2023年09月01日"
+                                    if (/\d{4}年\d{1,2}月\d{1,2}日/.test(timeValue)) {
+                                        timeValue = timeValue
+                                            .replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/, '$1-$2-$3')
+                                            .replace(/(\d{1,2})时(\d{1,2})分(?:(\d{1,2})秒)?/, ' $1:$2:$3');
+                                        console.log('中文日期格式转换后:', timeValue);
+                                    }
+                                    
+                                    // 尝试将处理后的时间字符串转换为日期对象
+                                    let dateObj;
+                                    
+                                    // 标准ISO格式 YYYY-MM-DD
+                                    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(timeValue)) {
+                                        dateObj = new Date(timeValue + 'T00:00:00');
+                                    } 
+                                    // 标准日期时间格式 YYYY-MM-DD HH:MM
+                                    else if (/^\d{4}-\d{1,2}-\d{1,2}\s\d{1,2}:\d{1,2}/.test(timeValue)) {
+                                        dateObj = new Date(timeValue.replace(' ', 'T'));
+                                    }
+                                    // 其他格式尝试原生解析
+                                    else {
+                                        dateObj = new Date(timeValue);
+                                    }
+                                    
+                                    // 检查转换后的日期是否有效
+                                    if (!isNaN(dateObj.getTime())) {
+                                        this.$set(this.tableData[index], 'time', dateObj);
+                                        console.log('填充时间(已转换):', dateObj);
+                                    } else {
+                                        console.warn('无法解析时间格式，使用当前日期:', timeValue);
+                                        this.$set(this.tableData[index], 'time', new Date());
+                                    }
+                                } catch (err) {
+                                    console.error('时间格式转换失败:', err, timeValue);
+                                    // 保存当前日期时间
+                                    this.$set(this.tableData[index], 'time', new Date());
+                                }
+                            }
+                            
+                            // 预处理读数 - 只保留数字
+                            if (data.reading) {
+                                let readingValue = data.reading.trim();
+                                // 彻底移除读数前的标签
+                                readingValue = readingValue.replace(/^(读数|示数|电表读数|表计读数|当前读数|本次读数|计量|用电量|数值|电量|用量)[:：]?\s*/ig, '');
+                                // 移除可能的单位
+                                readingValue = readingValue.replace(/\s*(度|千瓦时|kWh|kw|KW|kwh)$/ig, '');
+                                
+                                // 确保是有效数字
+                                if (isNaN(parseFloat(readingValue))) {
+                                    console.warn('读数不是有效数字:', readingValue);
+                                    
+                                    // 尝试提取数字部分
+                                    const numMatch = readingValue.match(/(\d+(?:\.\d+)?)/);
+                                    if (numMatch) {
+                                        readingValue = numMatch[1];
+                                        console.log('提取读数中的数字部分:', readingValue);
+                                    }
+                                }
+                                
+                                this.$set(this.tableData[index], 'reading', readingValue);
+                                console.log('填充读数:', readingValue);
+                            }
+                            
+                            // 添加有效标记，使字段显示为有效状态
+                            if (!this.tableData[index].valid) {
+                                this.$set(this.tableData[index], 'valid', {});
+                            }
+                            
+                            if (data.name) this.$set(this.tableData[index].valid, 'name', true);
+                            if (data.account) this.$set(this.tableData[index].valid, 'account', true);
+                            if (data.doorNumber) this.$set(this.tableData[index].valid, 'doorNumber', true);
+                            if (data.ratio) this.$set(this.tableData[index].valid, 'ratio', true);
+                            if (data.time) this.$set(this.tableData[index].valid, 'time', true);
+                            if (data.reading) this.$set(this.tableData[index].valid, 'reading', true);
+                            
+                            // 高亮显示该行
+                            this.$nextTick(() => {
+                                const tableRows = document.querySelectorAll('.meters-table tbody tr');
+                                if (tableRows && tableRows[index]) {
+                                    tableRows[index].style.animation = 'highlight 3s';
+                                    // 3秒后移除动画
+                                    setTimeout(() => {
+                                        if (tableRows[index]) {
+                                            tableRows[index].style.animation = '';
+                                        }
+                                    }, 3000);
+                                }
+                            });
+                            
+                        } catch (error) {
+                            console.error('填充表格数据时出错:', error);
+                        }
+                    },
+                    
+                    // 解析用户输入
+                    parseUserInput(text) {
+                        if (!text || text.trim() === '') {
+                            return {
+                                success: false,
+                                message: "输入文本为空"
+                            };
+                        }
+                        
+                        // OCR文本预处理：去除可能的特殊字符和格式错误
+                        const cleanedText = text
+                            .replace(/\r\n/g, '\n')
+                            .replace(/\s+/g, ' ')
+                            .replace(/[：:]\s*/g, ': ')
+                            .replace(/[，,]\s*/g, ', ')
+                            .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' '); // 替换各种空白字符
+                        
+                        console.log('处理清理后的文本:', cleanedText);
+                        
+                        // 首先尝试检测是否有多组数据（通过表头关键词分隔）
+                        const tableHeaders = ['表计回路名称', '所属账户', '门牌号', '变比', '抄表时间', '本次读数'];
+                        let hasMultipleGroups = false;
+                        
+                        // 检查文本中是否包含多个表头关键词序列
+                        let headerCount = 0;
+                        let lastHeaderPos = -1;
+                        
+                        for (const header of tableHeaders) {
+                            const regex = new RegExp(header, 'g');
+                            let match;
+                            while ((match = regex.exec(cleanedText)) !== null) {
+                                if (match.index > lastHeaderPos) {
+                                    headerCount++;
+                                    lastHeaderPos = match.index;
+                                }
+                            }
+                        }
+                        
+                        // 如果检测到多个表头序列，尝试按表头分组
+                        if (headerCount >= tableHeaders.length) {
+                            console.log('检测到可能的多组数据');
+                            
+                            // 尝试多行解析
+                            const multiRecords = this.parseMultipleRecords(cleanedText);
+                            if (multiRecords.length > 0) {
+                                return {
+                                    success: true,
+                                    data: multiRecords[0],
+                                    allRecords: multiRecords,
+                                    isMultiple: true
+                                };
+                            }
+                        }
+                        
+                        // 普通单条记录处理
+                        // 预先处理字段标签名
+                        let processedText = cleanedText;
+                        const labelPatterns = [
+                            { label: '表计回路名称', field: 'name' },
+                            { label: '表计名称', field: 'name' },
+                            { label: '回路名称', field: 'name' },
+                            { label: '电表名称', field: 'name' },
+                            { label: '所属账户', field: 'account' },
+                            { label: '账户名称', field: 'account' },
+                            { label: '户主', field: 'account' },
+                            { label: '门牌号', field: 'doorNumber' },
+                            { label: '房间号', field: 'doorNumber' },
+                            { label: '变比', field: 'ratio' },
+                            { label: '抄表时间', field: 'time' },
+                            { label: '日期', field: 'time' },
+                            { label: '本次读数', field: 'reading' },
+                            { label: '读数', field: 'reading' },
+                            { label: '示数', field: 'reading' }
+                        ];
+                        
+                        // 构建一个从字段标签到实际值的映射
+                        const fieldValues = {};
+                        
+                        // 遍历所有标签模式
+                        for (const pattern of labelPatterns) {
+                            const regex = new RegExp(`${pattern.label}\\s*[:：]?\\s*([^\\s]+[^，,。\\n]*?)(?=\\s+(?:表计回路名称|表计名称|回路名称|电表名称|所属账户|账户名称|户主|门牌号|房间号|变比|抄表时间|日期|本次读数|读数|示数)|$)`, 'i');
+                            const match = processedText.match(regex);
+                            
+                            if (match && match[1]) {
+                                // 去除字段值中可能包含的标签名
+                                let value = match[1].trim();
+                                fieldValues[pattern.field] = value;
+                                console.log(`从标签 "${pattern.label}" 提取值: ${value}`);
+                            }
+                        }
+                        
+                        // 如果没有通过标签提取到足够的字段，使用正则表达式提取
+                        if (Object.keys(fieldValues).length < 2) {
+                            console.log('标签提取不足，使用正则表达式提取');
+                            const record = this.extractRecord(cleanedText);
+                            
+                            // 文本分段处理
+                            const paragraphs = cleanedText.split(/\n{2,}/);
+                            // 如果有多个段落且提取结果不好，尝试逐段处理
+                            if (paragraphs.length > 1 && !record.name && !record.reading) {
+                                for (const paragraph of paragraphs) {
+                                    const segmentRecord = this.extractRecord(paragraph);
+                                    // 合并提取结果
+                                    for (const key in segmentRecord) {
+                                        if (segmentRecord[key] && !record[key]) {
+                                            record[key] = segmentRecord[key];
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // 合并从标签中提取的值
+                            for (const [field, value] of Object.entries(fieldValues)) {
+                                if (!record[field]) {
+                                    record[field] = value;
+                                }
+                            }
+                            
+                            // 若依然没有读数，尝试根据行划分处理数字
+                            if (!record.reading) {
+                                const lines = cleanedText.split('\n');
+                                for (const line of lines) {
+                                    if (/读数|示数|数值|电表|表计|仪表|度数|用电量|千瓦时|kWh/i.test(line)) {
+                                        const numMatch = line.match(/\b(\d+(?:\.\d+)?)\b/);
+                                        if (numMatch) {
+                                            record.reading = numMatch[1];
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // 特殊处理：对于抄表时间
+                            if (!record.time) {
+                                // 尝试匹配常见的日期格式
+                                const dateMatch = cleanedText.match(/\d{4}[-\/\.年]\d{1,2}[-\/\.月]\d{1,2}[日]?\s*(?:\d{1,2}[:时]\d{1,2}[:分]?(?:\d{1,2}[秒]?)?)?/);
+                                if (dateMatch) {
+                                    let dateStr = dateMatch[0];
+                                    
+                                    // 处理混合格式的日期："2025-02月12日01:00"
+                                    if (/\d{4}-\d{1,2}月\d{1,2}日/.test(dateStr)) {
+                                        dateStr = dateStr.replace(/(\d{4})-(\d{1,2})月(\d{1,2})日/, '$1-$2-$3');
+                                    }
+                                    
+                                    // 处理中文日期格式
+                                    if (/\d{4}年\d{1,2}月\d{1,2}日/.test(dateStr)) {
+                                        dateStr = dateStr.replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/, '$1-$2-$3');
+                                    }
+                                    
+                                    // 处理时间部分
+                                    if (/\d{1,2}时\d{1,2}分/.test(dateStr)) {
+                                        dateStr = dateStr.replace(/(\d{1,2})时(\d{1,2})分/, '$1:$2');
+                                    }
+                                    
+                                    record.time = dateStr;
+                                }
+                            }
+                            
+                            // 使用fieldValues的值覆盖record中的值
+                            for (const [field, value] of Object.entries(fieldValues)) {
+                                record[field] = value;
+                            }
+                        
+                        // 检查是否有至少一个有效字段
+                            const hasValidField = record.name || record.reading || 
+                                (record.account && record.doorNumber);
+                            
+                            if (hasValidField) {
+                                // 如果没有表计名称但是有门牌号，生成一个默认表计名称
+                                if (!record.name && record.doorNumber) {
+                                    record.name = `电表${record.doorNumber}`;
+                                }
+                                
+                            return {
+                                success: true,
+                                data: record
+                            };
+                            }
+                        } else {
+                            // 从提取的字段值构建记录
+                            // 检查是否有至少一个有效字段
+                            const hasValidField = fieldValues.name || fieldValues.reading || 
+                                (fieldValues.account && fieldValues.doorNumber);
+                            
+                            if (hasValidField) {
+                                // 如果没有表计名称但是有门牌号，生成一个默认表计名称
+                                if (!fieldValues.name && fieldValues.doorNumber) {
+                                    fieldValues.name = `电表${fieldValues.doorNumber}`;
+                                }
+                                
+                                return {
+                                    success: true,
+                                    data: fieldValues
+                                };
+                            }
+                        }
+                        
+                        return {
+                            success: false,
+                            message: "未能识别表计信息"
+                        };
+                    },
+                    
+                    // 处理图片OCR识别
+                    processImageOCR(imageFile) {
+                        return new Promise(async (resolve, reject) => {
+                            if (!imageFile) {
+                                reject(new Error('未提供图片文件'));
+                                return;
+                            }
+                            
+                            // 检查Tesseract.js是否已加载
+                            if (!window.tesseractLoaded) {
+                                console.error('Tesseract.js未加载，无法执行OCR');
+                                reject(new Error(window.tesseractError || 'OCR引擎未加载'));
+                                return;
+                            }
+                            
+                            this.isProcessingOCR = true;
+                            console.log('开始OCR处理图片:', imageFile.name);
+                            
+                            try {
+                                // 找到AI消息索引，用于显示进度
+                                const aiMsgIndex = this.chatMessages.findIndex(msg => 
+                                    msg.type === 'ai' && msg.content.includes('正在处理上传的图片'));
+                                
+                                // 创建进度更新函数
+                                const updateProgress = (progress) => {
+                                    if (aiMsgIndex !== -1) {
+                                        const progressPercent = Math.round(progress * 100);
+                                        console.log(`OCR进度: ${progressPercent}%`);
+                                        this.$set(this.chatMessages, aiMsgIndex, {
+                                            type: 'ai',
+                                            content: `正在处理上传的图片，识别文本内容...(${progressPercent}%)`,
+                                            imageUrl: aiMsgIndex >= 0 ? this.chatMessages[aiMsgIndex].imageUrl : null
+                                        });
+                                    }
+                                };
+                                
+                                // 创建文件URL
+                                const imageURL = URL.createObjectURL(imageFile);
+                                
+                                // 设置任务超时，防止无限等待
+                                let timeoutId;
+                                const timeout = new Promise((_, rejectTimeout) => {
+                                    timeoutId = setTimeout(() => {
+                                        rejectTimeout(new Error('OCR识别超时(30秒)，请尝试更小的图片或手动输入'));
+                                    }, 30000); // 30秒超时
+                                });
+                                
+                                // 初始进度
+                                updateProgress(0.05);
+                                
+                                try {
+                                    // 创建Worker - 使用Tesseract.js v4 API
+                                    console.log('创建Tesseract Worker...');
+                                    const worker = await Tesseract.createWorker({
+                                        logger: m => {
+                                            console.log('Tesseract进度:', m);
+                                            if (m.status === 'recognizing text') {
+                                                updateProgress(m.progress);
+                                            }
+                                        },
+                                        errorHandler: err => {
+                                            console.error('Tesseract错误:', err);
+                                        }
+                                    });
+                                    
+                                    // 先加载语言模型
+                                    console.log('加载Tesseract语言模型...');
+                                    updateProgress(0.1);
+                                    
+                                    await worker.loadLanguage('chi_sim+eng');
+                                    await worker.initialize('chi_sim+eng');
+                                    
+                                    updateProgress(0.2);
+                                    console.log('语言模型加载成功，开始识别...');
+                                    
+                                    // 设置参数
+                                    await worker.setParameters({
+                                        preserve_interword_spaces: '1',
+                                        tessedit_char_whitelist: '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ:.,-/(){}[]<>_+=*&^%$#@!~`|\\\'\" 年月日时分秒电表中号室户单元层区域回路变比所属账户门牌读数示数抄表时间千瓦小时度',
+                                    });
+                                    
+                                    // 使用 race 确保任务不会永远卡住
+                                    updateProgress(0.3);
+                                    const recognizePromise = worker.recognize(imageURL);
+                                    const result = await Promise.race([recognizePromise, timeout]);
+                                    clearTimeout(timeoutId); // 清除超时
+                                    
+                                    // 识别完成
+                                    updateProgress(0.9);
+                                    
+                                    const extractedText = result.data.text || '';
+                                    const confidence = result.data.confidence || 0;
+                                    console.log('OCR识别完成，文本长度:', extractedText.length, '置信度:', confidence);
+                                    
+                                    // 检查OCR结果是否有效
+                                    if (!extractedText || extractedText.trim().length < 5) {
+                                        throw new Error('OCR识别结果为空或过短，无法提取有效信息');
+                                    }
+                                    
+                                    // 更简化的置信度处理
+                                    let textWithConfidence = '';
+                                    const words = result.data.words || [];
+                                    if (words.length > 0) {
+                                        console.log('OCR识别到单词数:', words.length);
+                                        textWithConfidence = words
+                                            .map(word => word.text)
+                                            .join(' ');
+                                    }
+                                    
+                                    // 释放URL和终止worker
+                                    URL.revokeObjectURL(imageURL);
+                                    await worker.terminate();
+                                    
+                                    this.isProcessingOCR = false;
+                                    updateProgress(1.0);
+                                    
+                                    // 对OCR结果进行预处理
+                                    let processedText = extractedText
+                                        .replace(/\r\n/g, '\n')
+                                        // 去除多余的空格
+                                        .replace(/\s+/g, ' ')
+                                        .replace(/(\d)\s+(?=\d)/g, '$1') // 数字之间的空格移除
+                                        // 处理常见OCR错误
+                                        .replace(/表i十|表什|表讠十|表计{1,2}/g, '表计')
+                                        .replace(/[0O]CR/gi, 'OCR')
+                                        .replace(/千瓦叫|千瓦H|千瓦小时/g, '千瓦时')
+                                        // 修复可能的字符误识别
+                                        .replace(/中屯|中屯|中岛|中冈|中闪|中閃/g, '中电')
+                                        // 处理常见的字段标签错误
+                                        .replace(/表计回(略|絡|路名称)/g, '表计回路名称')
+                                        .replace(/表讠十|表汁十/g, '表计')
+                                        .replace(/(电|曱)表/g, '电表')
+                                        .replace(/所(属|屬)(賬|账)户/g, '所属账户')
+                                        .replace(/本(次|炊)读数/g, '本次读数')
+                                        // 处理数字和单位之间的空格
+                                        .replace(/(\d)\s+(度|千瓦时|kWh)/gi, '$1$2')
+                                        // 修复常见日期格式OCR错误
+                                        .replace(/(\d{4})[^0-9-](\d{1,2})[^0-9-](\d{1,2})/g, '$1-$2-$3')
+                                        .replace(/(\d{1,2})[^0-9:](\d{1,2})[^0-9:](\d{1,2})/g, '$1:$2:$3')
+                                        // 增加表计关键词之间的分隔
+                                        .replace(/(表计回路名称|所属账户|门牌号|变比|抄表时间|本次读数)(?=\S)/g, '$1 ')
+                                        // 增强读数识别，确保数字格式正确
+                                        .replace(/读数[:：]?\s*([^0-9]*)([\d,\.]+)([^0-9]*)/g, '读数: $2')
+                                        // 修复变比格式
+                                        .replace(/变比[:：]?\s*(\d+)[\/\\:](\d+)/g, '变比: $1:$2')
+                                        // 增强中文日期识别
+                                        .replace(/(\d{4})[年](\d{1,2})[月](\d{1,2})[日]/g, '$1-$2-$3');
+                                    
+                                    console.log('预处理后的OCR文本:', processedText);
+                                    
+                                    // 调用DeepSeek API进行结构化抽取 - 为后续实现准备
+                                    try {
+                                        // 先返回OCR结果，然后尝试结构化提取
+                                        resolve({
+                                            success: true,
+                                            rawText: processedText,
+                                            confidence: confidence,
+                                            textWithConfidence: textWithConfidence
+                                        });
+                                    } catch (structureError) {
+                                        console.error('结构化抽取错误:', structureError);
+                                        // 即使结构化失败，也返回原始OCR结果
+                                        resolve({
+                                            success: true,
+                                            rawText: processedText,
+                                            confidence: confidence,
+                                            textWithConfidence: textWithConfidence,
+                                            structureError: structureError.message
+                                        });
+                                    }
+                                } catch (error) {
+                                    // 释放资源
+                                    if (imageURL) URL.revokeObjectURL(imageURL);
+                                    clearTimeout(timeoutId);
+                                    
+                                    console.error('OCR处理过程中出错:', error);
+                                    reject(error);
+                                }
+                            } catch (outerError) {
+                                console.error('OCR初始化错误:', outerError);
+                                this.isProcessingOCR = false;
+                                reject(outerError);
+                            }
+                        });
+                    },
+                    
+                    // 解析多条记录
+                    parseMultipleRecords(text) {
+                        if (!text || text.trim() === '') {
+                            return [];
+                        }
+                        
+                        console.log('尝试解析多条记录:', text);
+                        
+                        // 预处理文本
+                        const cleanedText = text
+                            .replace(/\r\n/g, '\n')
+                            .replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
+                        
+                        // 尝试多种分隔方式
+                        
+                        // 方式1：按空行分隔
+                        const paragraphs = cleanedText.split(/\n\s*\n+/);
+                        if (paragraphs.length > 1) {
+                            console.log('通过空行分隔得到', paragraphs.length, '个段落');
+                            // 尝试从每个段落提取一条记录
+                            const records = paragraphs
+                                .map(para => this.extractRecord(para))
+                                .filter(record => Object.keys(record).some(key => record[key])); // 过滤掉空记录
+                                
+                            if (records.length > 1) {
+                                console.log('从段落中提取到', records.length, '条记录');
+                                return records;
+                            }
+                        }
+                        
+                        // 方式2：按行号或序号分隔
+                        const rowNumberMatch = cleanedText.match(/^\s*(\d+)[、.．]\s*|[\n]\s*(\d+)[、.．]\s*/g);
+                        if (rowNumberMatch && rowNumberMatch.length > 1) {
+                            console.log('检测到按行号分隔的文本');
+                            // 使用行号作为分隔点
+                            const lines = cleanedText.split('\n');
+                            let currentRecord = {};
+                            const records = [];
+                            let collectingRecord = false;
+                            
+                            for (const line of lines) {
+                                const rowStart = line.match(/^\s*(\d+)[、.．]\s*/);
+                                if (rowStart) {
+                                    // 新行开始，保存之前的记录（如果有）
+                                    if (collectingRecord && Object.keys(currentRecord).some(key => currentRecord[key])) {
+                                        records.push(currentRecord);
+                                        currentRecord = {};
+                                    }
+                                    collectingRecord = true;
+                                }
+                                
+                                if (collectingRecord) {
+                                    // 从当前行提取信息
+                                    const lineRecord = this.extractRecord(line);
+                                    // 合并到当前记录中
+                                    for (const key in lineRecord) {
+                                        if (lineRecord[key] && !currentRecord[key]) {
+                                            currentRecord[key] = lineRecord[key];
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // 添加最后一条记录
+                            if (collectingRecord && Object.keys(currentRecord).some(key => currentRecord[key])) {
+                                records.push(currentRecord);
+                            }
+                            
+                            if (records.length > 1) {
+                                console.log('从行号分隔中提取到', records.length, '条记录');
+                                return records;
+                            }
+                        }
+                        
+                        // 方式3：按表格式行分隔
+                        // 检查是否有表头和多行数据的特征
+                        const tableHeaderMatch = cleanedText.match(/表计(?:名称|回路)|电表|所属账户|门牌号|变比|抄表时间|读数/g);
+                        if (tableHeaderMatch && tableHeaderMatch.length >= 2) {
+                            console.log('检测到可能的表格数据');
+                            // 按行分隔
+                            const lines = cleanedText.split('\n');
+                            
+                            // 识别表头行
+                            let headerIndex = -1;
+                            for (let i = 0; i < Math.min(5, lines.length); i++) {
+                                if (lines[i].match(/表计(?:名称|回路)|电表|所属账户|门牌号|变比|抄表时间|读数/g)) {
+                                    headerIndex = i;
+                                    break;
+                                }
+                            }
+                            
+                            // 如果找到表头，尝试解析后续行作为数据行
+                            if (headerIndex >= 0) {
+                                const records = [];
+                                let validLinesCount = 0;
+                                
+                                for (let i = headerIndex + 1; i < lines.length; i++) {
+                                    const line = lines[i].trim();
+                                    if (!line) continue; // 跳过空行
+                                    
+                                    // 检查行是否包含有效数据（至少包含一个数字或电表名称）
+                                    if (line.match(/\d+|电表\w+/)) {
+                                        validLinesCount++;
+                                        
+                                        // 识别当前行的表计信息
+                                        const record = {};
+                                        
+                                        // 在整行中查找各种字段
+                                        const lineRecord = this.extractRecord(line);
+                                        Object.assign(record, lineRecord);
+                                        
+                                        // 如果提取到有效信息，添加到记录中
+                                        if (Object.keys(record).some(key => record[key])) {
+                                            records.push(record);
+                                        }
+                                    }
+                                }
+                                
+                                if (records.length > 1) {
+                                    console.log('从表格式数据中提取到', records.length, '条记录');
+                                    return records;
+                                }
+                            }
+                        }
+                        
+                        // 方式4：直接搜索多个表计名称和读数
+                        const nameMatches = Array.from(text.matchAll(/(?:电表|表计)\s*[号#]?\s*(\d+)|中电(\d+)号?|中电\s*[:：]?\s*(\d+)/g));
+                        if (nameMatches.length > 1) {
+                            console.log('检测到多个表计名称');
+                            const records = [];
+                            
+                            // 为每个表计名称尝试创建一条记录
+                            nameMatches.forEach(match => {
+                                // 提取表计编号
+                                const meterNumber = match[1] || match[2] || match[3];
+                                if (!meterNumber) return;
+                                
+                                // 找到表计名称附近的上下文
+                                const matchIndex = match.index;
+                                const contextStart = Math.max(0, matchIndex - 100);
+                                const contextEnd = Math.min(text.length, matchIndex + 100);
+                                const context = text.substring(contextStart, contextEnd);
+                                
+                                // 从上下文中提取信息
+                                const record = this.extractRecord(context);
+                                
+                                // 确保表计名称正确
+                                if (!record.name) {
+                                    record.name = meterNumber;
+                                }
+                                
+                                // 如果提取到有效信息，添加到记录
+                                if (Object.keys(record).some(key => record[key] && key !== 'name')) {
+                                    records.push(record);
+                                }
+                            });
+                            
+                            if (records.length > 1) {
+                                console.log('通过表计名称匹配提取到', records.length, '条记录');
+                                return records;
+                            }
+                        }
+                        
+                        // 方式5：按日期时间分隔
+                        const timeMatches = Array.from(text.matchAll(/\d{4}[-\/\.年]\d{1,2}[-\/\.月]\d{1,2}[日]?|\d{4}[-\/\.]\d{1,2}[-\/\.]\d{1,2}|\d{1,2}[-\/\.月]\d{1,2}[日]?/g));
+                        if (timeMatches.length > 1) {
+                            console.log('检测到多个日期');
+                            const records = [];
+                            
+                            // 为每个日期创建一条记录
+                            for (let i = 0; i < timeMatches.length; i++) {
+                                const currentMatch = timeMatches[i];
+                                const nextMatch = timeMatches[i + 1];
+                                
+                                const startIndex = currentMatch.index;
+                                const endIndex = nextMatch ? nextMatch.index : text.length;
+                                
+                                // 提取当前日期和下一个日期之间的文本
+                                const segment = text.substring(startIndex, endIndex);
+                                
+                                // 从段落中提取记录
+                                const record = this.extractRecord(segment);
+                                
+                                // 确保时间字段正确
+                                if (!record.time) {
+                                    record.time = currentMatch[0];
+                                }
+                                
+                                // 如果提取到有效信息，添加到记录
+                                if (Object.keys(record).some(key => record[key] && key !== 'time')) {
+                                    records.push(record);
+                                }
+                            }
+                            
+                            if (records.length > 1) {
+                                console.log('通过日期分隔提取到', records.length, '条记录');
+                                return records;
+                            }
+                        }
+                        
+                        // 如果所有方法都未能识别多条记录，返回空数组
+                        return [];
+                    },
+                    extractRecord(text) {
+                        const record = {};
+                        console.log('提取信息从文本:', text);
+                        
+                        // 预处理文本 - 确保关键词前后有空格
+                        let processedText = text
+                            .replace(/(表计回路名称|表计名称|回路名称|电表名称|所属账户|账户名称|户主|门牌号|房间号|变比|抄表时间|日期|本次读数|读数|示数)/g, ' $1 ')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                        
+                        // 直接按字段关键词分段提取
+                        const segmentPatterns = [
+                            { startKeyword: '表计回路名称', endKeywords: ['所属账户', '账户名称', '户主', '门牌号', '房间号', '变比', '抄表时间', '日期', '本次读数', '读数', '示数'], field: 'name' },
+                            { startKeyword: '表计名称', endKeywords: ['所属账户', '账户名称', '户主', '门牌号', '房间号', '变比', '抄表时间', '日期', '本次读数', '读数', '示数'], field: 'name' },
+                            { startKeyword: '回路名称', endKeywords: ['所属账户', '账户名称', '户主', '门牌号', '房间号', '变比', '抄表时间', '日期', '本次读数', '读数', '示数'], field: 'name' },
+                            { startKeyword: '电表名称', endKeywords: ['所属账户', '账户名称', '户主', '门牌号', '房间号', '变比', '抄表时间', '日期', '本次读数', '读数', '示数'], field: 'name' },
+                            { startKeyword: '所属账户', endKeywords: ['门牌号', '房间号', '变比', '抄表时间', '日期', '本次读数', '读数', '示数'], field: 'account' },
+                            { startKeyword: '账户名称', endKeywords: ['门牌号', '房间号', '变比', '抄表时间', '日期', '本次读数', '读数', '示数'], field: 'account' },
+                            { startKeyword: '户主', endKeywords: ['门牌号', '房间号', '变比', '抄表时间', '日期', '本次读数', '读数', '示数'], field: 'account' },
+                            { startKeyword: '门牌号', endKeywords: ['变比', '抄表时间', '日期', '本次读数', '读数', '示数'], field: 'doorNumber' },
+                            { startKeyword: '房间号', endKeywords: ['变比', '抄表时间', '日期', '本次读数', '读数', '示数'], field: 'doorNumber' },
+                            { startKeyword: '变比', endKeywords: ['抄表时间', '日期', '本次读数', '读数', '示数'], field: 'ratio' },
+                            { startKeyword: '抄表时间', endKeywords: ['本次读数', '读数', '示数'], field: 'time' },
+                            { startKeyword: '日期', endKeywords: ['本次读数', '读数', '示数'], field: 'time' },
+                            { startKeyword: '本次读数', endKeywords: [], field: 'reading' },
+                            { startKeyword: '读数', endKeywords: [], field: 'reading' },
+                            { startKeyword: '示数', endKeywords: [], field: 'reading' }
+                        ];
+                        
+                        for (const pattern of segmentPatterns) {
+                            const startIndex = processedText.indexOf(pattern.startKeyword);
+                            if (startIndex === -1) continue;
+                            
+                            // 找到关键词后的值开始位置
+                            const valueStartIndex = startIndex + pattern.startKeyword.length;
+                            let valueEndIndex = processedText.length;
+                            
+                            // 寻找下一个字段关键词作为结束位置
+                            for (const endKeyword of pattern.endKeywords) {
+                                const endIndex = processedText.indexOf(endKeyword, valueStartIndex);
+                                if (endIndex !== -1 && endIndex < valueEndIndex) {
+                                    valueEndIndex = endIndex;
+                                }
+                            }
+                            
+                            // 提取值并清理
+                            if (valueEndIndex > valueStartIndex) {
+                                let value = processedText.substring(valueStartIndex, valueEndIndex).trim();
+                                
+                                // 去除冒号和多余空格
+                                value = value.replace(/^[\s:：]+/, '').trim();
+                                
+                                // 确保不是空值
+                                if (value && value !== ':' && value !== '：') {
+                                    record[pattern.field] = value;
+                                    console.log(`分段提取 ${pattern.field}: ${value}`);
+                                }
+                            }
+                        }
+                        
+                        // 尝试匹配各个字段
+                        for (const [field, regex] of Object.entries(this.fieldsRegex)) {
+                            // 如果已经通过分段提取到了该字段，则跳过
+                            if (record[field]) continue;
+                            
+                            // 创建新的正则表达式对象，添加全局标志
+                            const globalRegex = new RegExp(regex.source, 'g');
+                            let match;
+                            
+                            while ((match = globalRegex.exec(text)) !== null) {
+                                // 找到第一个非空捕获组
+                                for (let i = 1; i < match.length; i++) {
+                                    if (match[i]) {
+                                        // 特殊处理ratio字段的分数形式 (如 1/2)
+                                        if (field === 'ratio' && match[i+1] && i < match.length - 1) {
+                                            record[field] = (parseFloat(match[i]) / parseFloat(match[i+1])).toString();
+                                        break;
+                                    }
+                                        
+                                        let value = match[i].trim();
+                                        
+                                        // 去除字段值前面可能包含的字段名称
+                                        if (field === 'name') {
+                                            value = value.replace(/^(表计回路名称|表计名称|回路名称|表计回路|电表名称|表计)[:：]?\s*/i, '');
+                                            value = value.replace(/^电表\s*[:：]?\s*/i, '');
+                                            value = value.replace(/^(中电)\s*[:：]?\s*/i, '$1');
+                                            
+                                            // 如果是"电表123"这种格式，直接保留数字部分
+                                            if (value.startsWith('电表') && /电表\d+号?/.test(value)) {
+                                                const numMatch = value.match(/电表(\d+号?)/);
+                                                if (numMatch) {
+                                                    value = numMatch[1];
+                                                }
+                                            } else if (value.startsWith('中电') && /中电\d+号?/.test(value)) {
+                                                // 如果是"中电123"这种格式，直接保留
+                                            } else if (value.includes('电表')) {
+                                                // 如果包含"电表"但格式不是"电表123"，提取后面的部分
+                                                const nameAfterMatch = value.match(/电表\s*[:：]?\s*(.*)/);
+                                                if (nameAfterMatch) {
+                                                    value = nameAfterMatch[1];
+                                                }
+                                            }
+                                        } else if (field === 'account') {
+                                            value = value.replace(/^(所属账户|账户名称|户主|用户名|账户|客户|住户|业主)[:：]?\s*/i, '');
+                                        } else if (field === 'doorNumber') {
+                                            value = value.replace(/^(门牌号|房间号|单元号|门号|房号|住址|地址)[:：]?\s*/i, '');
+                                        } else if (field === 'ratio') {
+                                            value = value.replace(/^(变比|倍率|比率|比例)[:：]?\s*/i, '');
+                                        } else if (field === 'time') {
+                                            value = value.replace(/^(抄表时间|日期|时间)[:：]?\s*/i, '');
+                                            
+                                            // 处理混合格式的日期："2025-02月12日01:00"
+                                            if (/\d{4}-\d{1,2}月\d{1,2}日/.test(value)) {
+                                                value = value.replace(/(\d{4})-(\d{1,2})月(\d{1,2})日/, '$1-$2-$3');
+                                            }
+                                            
+                                            // 处理中文日期格式
+                                            if (/\d{4}年\d{1,2}月\d{1,2}日/.test(value)) {
+                                                value = value.replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/, '$1-$2-$3');
+                                            }
+                                            
+                                            // 处理时间部分
+                                            if (/\d{1,2}时\d{1,2}分/.test(value)) {
+                                                value = value.replace(/(\d{1,2})时(\d{1,2})分/, '$1:$2');
+                                            }
+                                        } else if (field === 'reading') {
+                                            value = value.replace(/^(读数|示数|电表读数|表计读数|当前读数|本次读数|计量|用电量|数值)[:：]?\s*/i, '');
+                                            // 移除可能的单位
+                                            value = value.replace(/\s*(度|千瓦时|kWh|kw|KW)$/i, '');
+                                        }
+                                        
+                                        record[field] = value;
+                                        console.log(`匹配到 ${field}: ${record[field]}`);
+                                        break;
+                                    }
+                                }
+                                
+                                // 找到匹配后跳出，避免多次匹配
+                                break;
+                            }
+                        }
+                        
+                        // 增强抄表时间匹配
+                        if (!record.time) {
+                            // 尝试多种日期时间格式的匹配
+                            const datePatterns = [
+                                // 完整日期时间格式
+                                /(\d{4}[-\/\.年]\d{1,2}[-\/\.月]\d{1,2}[日号]?\s*\d{1,2}[:时]\d{1,2}[:分]?(?:\d{1,2}[秒]?)?)/,
+                                // 仅日期
+                                /(\d{4}[-\/\.年]\d{1,2}[-\/\.月]\d{1,2}[日号]?)/,
+                                // 月日格式
+                                /(\d{1,2}[-\/\.月]\d{1,2}[日号])/,
+                                // 数字日期
+                                /(\d{4}[-\/\.]\d{1,2}[-\/\.]\d{1,2})/,
+                                // 混合格式 yyyy-MM月dd日
+                                /(\d{4}-\d{1,2}月\d{1,2}日(?:\s*\d{1,2}[:]\d{1,2})?)/,
+                                // 包含"抄表时间"关键词的
+                                /抄表时间[:：]?\s*(\d{4}[-\/\.年]?\d{1,2}[-\/\.月]?\d{1,2}[日号]?(?:\s*\d{1,2}[:时]?\d{1,2}(?:[:分]?\d{1,2}[秒]?)?)?)/,
+                                // 包含"日期"关键词的
+                                /日期[:：]?\s*(\d{4}[-\/\.年]?\d{1,2}[-\/\.月]?\d{1,2}[日号]?(?:\s*\d{1,2}[:时]?\d{1,2}(?:[:分]?\d{1,2}[秒]?)?)?)/
+                            ];
+                            
+                            for (const pattern of datePatterns) {
+                                const match = text.match(pattern);
+                                if (match) {
+                                    let dateStr = match[1].trim();
+                                    // 去除日期前可能的标签
+                                    dateStr = dateStr.replace(/^(抄表时间|日期|时间)[:：]?\s*/i, '');
+                                    
+                                    // 处理混合格式的日期："2025-02月12日01:00"
+                                    if (/\d{4}-\d{1,2}月\d{1,2}日/.test(dateStr)) {
+                                        dateStr = dateStr.replace(/(\d{4})-(\d{1,2})月(\d{1,2})日/, '$1-$2-$3');
+                                    }
+                                    
+                                    // 处理中文日期格式
+                                    if (/\d{4}年\d{1,2}月\d{1,2}日/.test(dateStr)) {
+                                        dateStr = dateStr.replace(/(\d{4})年(\d{1,2})月(\d{1,2})日/, '$1-$2-$3');
+                                    }
+                                    
+                                    // 处理时间部分
+                                    if (/\d{1,2}时\d{1,2}分/.test(dateStr)) {
+                                        dateStr = dateStr.replace(/(\d{1,2})时(\d{1,2})分/, '$1:$2');
+                                    }
+                                    
+                                    record.time = dateStr;
+                                    console.log(`匹配到日期时间: ${dateStr}`);
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // 直接尝试定位特定的信息
+                        if (!record.name && text.includes('电表')) {
+                            const nameMatch = text.match(/电表\s*[号#]?\s*(\d+)/);
+                            if (nameMatch) {
+                                record.name = nameMatch[1];
+                                console.log(`通过二次匹配识别电表名: ${record.name}`);
+                            }
+                        }
+                        
+                        if (!record.name && text.includes('中电')) {
+                            const nameMatch = text.match(/中电\s*[:：]?\s*(\d+)/);
+                            if (nameMatch) {
+                                record.name = `中电${nameMatch[1]}`;
+                                console.log(`通过二次匹配识别表计名称: ${record.name}`);
+                            }
+                        }
+                        
+                        // 如果没有提取到读数，尝试直接匹配数字
+                        if (!record.reading) {
+                            // 先查找与读数相关的关键词
+                            const readingKeywords = ["读数", "示数", "电表读数", "表计读数", "当前读数", "本次读数", "用电量", "度数"];
+                            for (const keyword of readingKeywords) {
+                                const keywordIndex = text.indexOf(keyword);
+                                if (keywordIndex !== -1) {
+                                    // 在关键词后查找数字
+                                    const afterKeyword = text.substring(keywordIndex + keyword.length);
+                                    const numMatch = afterKeyword.match(/\s*[：:为是]?\s*(\d+(?:\.\d+)?)/);
+                                    if (numMatch) {
+                                record.reading = numMatch[1];
+                                        console.log(`通过关键词 "${keyword}" 找到读数: ${record.reading}`);
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // 如果还是没找到，尝试查找所有数字
+                            if (!record.reading) {
+                                try {
+                                    // 找出文本中所有的数字
+                                    const numberMatches = Array.from(text.matchAll(/\b(\d+(?:\.\d+)?)\b/g));
+                                    
+                                    // 找到最后一个数字，通常是读数
+                                    if (numberMatches.length > 0) {
+                                        const lastNumber = numberMatches[numberMatches.length - 1][1];
+                                        // 确保这个数字还没被使用过
+                                        const usedNumbers = Object.values(record).filter(value => 
+                                            typeof value === 'string' && /^\d+(\.\d+)?$/.test(value)
+                                        );
+                                        
+                                        if (!usedNumbers.includes(lastNumber)) {
+                                            // 检查数字前后的文本，如果包含相关词汇更可能是读数
+                                            const numberIndex = text.lastIndexOf(lastNumber);
+                                            const surroundingText = text.substring(
+                                                Math.max(0, numberIndex - 20),
+                                                Math.min(text.length, numberIndex + lastNumber.length + 20)
+                                            );
+                                            
+                                            if (
+                                                surroundingText.includes('读数') || 
+                                                surroundingText.includes('示数') || 
+                                                surroundingText.includes('度数') || 
+                                                surroundingText.includes('用电量') || 
+                                                surroundingText.includes('千瓦时') ||
+                                                surroundingText.includes('kWh')
+                                            ) {
+                                                record.reading = lastNumber;
+                                                console.log(`通过周围文本上下文找到读数: ${record.reading}`);
+                                            }
+                                            // 如果数字非常大（超过1000），且没有其他明确标识，很可能是读数
+                                            else if (parseFloat(lastNumber) > 1000) {
+                                                record.reading = lastNumber;
+                                                console.log(`通过数值大小推断读数: ${record.reading}`);
+                                            }
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.error('尝试匹配读数时出错:', error);
+                                }
+                            }
+                        }
+                        
+                        return record;
+                    },
+                    // 图片预处理，提高OCR识别率 - 简化版
+                    preprocessImage(imageFile) {
+                        return new Promise((resolve, reject) => {
+                            try {
+                                // 检查文件大小，如果超过5MB，显示警告
+                                const fileSizeMB = imageFile.size / (1024 * 1024);
+                                if (fileSizeMB > 5) {
+                                    console.warn(`图片文件过大(${fileSizeMB.toFixed(2)}MB)，可能会影响OCR识别速度`);
+                                    // 通知用户
+                                    const aiMsgIndex = this.chatMessages.findIndex(msg => 
+                                        msg.type === 'ai' && msg.content.includes('正在处理上传的图片'));
+                                    
+                                    if (aiMsgIndex !== -1) {
+                                        this.$set(this.chatMessages, aiMsgIndex, {
+                                            type: 'ai',
+                                            content: `正在处理上传的图片，由于图片较大(${fileSizeMB.toFixed(2)}MB)，处理可能需要较长时间...`,
+                                            imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                                        });
+                                    }
+                                }
+                                
+                                const img = new Image();
+                                img.onload = () => {
+                                    // 创建Canvas
+                                    const canvas = document.createElement('canvas');
+                                    
+                                    // 如果图片太大，调整大小以提高处理速度
+                                    let width = img.width;
+                                    let height = img.height;
+                                    
+                                    // 简化的图片尺寸调整策略
+                                    const maxSize = 1200; // 降低最大尺寸，减少处理量
+                                    
+                                    if (width > maxSize || height > maxSize) {
+                                        if (width > height) {
+                                            height = Math.round(height * (maxSize / width));
+                                            width = maxSize;
+                                        } else {
+                                            width = Math.round(width * (maxSize / height));
+                                            height = maxSize;
+                                        }
+                                        
+                                        console.log(`调整图片尺寸为 ${width}x${height}，提高OCR速度`);
+                                    }
+                                    
+                                    canvas.width = width;
+                                    canvas.height = height;
+                                    
+                                    const ctx = canvas.getContext('2d');
+                                    
+                                    // 先绘制原始图片
+                                    ctx.drawImage(img, 0, 0, width, height);
+                                    
+                                    try {
+                                        // 获取图像数据
+                                        const imageData = ctx.getImageData(0, 0, width, height);
+                                        const data = imageData.data;
+                                        
+                                        // 检查图像亮度
+                                        let totalBrightness = 0;
+                                        const pixelSampleCount = 1000; // 只采样部分像素，提高速度
+                                        const sampleInterval = Math.floor(data.length / 4 / pixelSampleCount);
+                                        
+                                        let sampleCount = 0;
+                                        for (let i = 0; i < data.length; i += 4 * sampleInterval) {
+                                            if (i >= data.length) break;
+                                            const r = data[i];
+                                            const g = data[i + 1];
+                                            const b = data[i + 2];
+                                            // 计算亮度
+                                            const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+                                            totalBrightness += brightness;
+                                            sampleCount++;
+                                        }
+                                        
+                                        // 计算平均亮度
+                                        const avgBrightness = totalBrightness / sampleCount;
+                                        console.log('图像平均亮度:', avgBrightness);
+                                        
+                                        // 简化的图像增强处理 - 使用对比度增强
+                                        const contrast = 1.2; // 增加对比度
+                                        const offset = 10;    // 亮度补偿
+                                        
+                                        for (let i = 0; i < data.length; i += 4) {
+                                            // 简单的对比度调整公式
+                                            data[i] = Math.max(0, Math.min(255, (data[i] - 128) * contrast + 128 + offset));
+                                            data[i + 1] = Math.max(0, Math.min(255, (data[i + 1] - 128) * contrast + 128 + offset));
+                                            data[i + 2] = Math.max(0, Math.min(255, (data[i + 2] - 128) * contrast + 128 + offset));
+                                        }
+                                        
+                                        // 将处理后的图像数据绘制回Canvas
+                                        ctx.putImageData(imageData, 0, 0);
+                                        console.log('图像增强处理完成');
+                                    } catch (err) {
+                                        console.error('图片预处理错误:', err);
+                                        // 出错时仍然使用原始图片
+                                    }
+                                    
+                                    // 转换为Blob，使用高质量PNG格式保存
+                                    canvas.toBlob((blob) => {
+                                        if (!blob) {
+                                            reject(new Error('无法将Canvas转换为Blob'));
+                                            return;
+                                        }
+                                        
+                                        // 创建新文件
+                                        const processedFile = new File([blob], 'processed_' + imageFile.name, {
+                                            type: 'image/png',
+                                            lastModified: Date.now()
+                                        });
+                                        
+                                        console.log('图像预处理成功，文件大小:', Math.round(blob.size/1024), 'KB');
+                                        resolve(processedFile);
+                                    }, 'image/png', 1.0); // 使用最高质量的PNG，确保不丢失处理后的细节
+                                };
+                                
+                                img.onerror = () => {
+                                    console.error('图片加载失败');
+                                    // 如果处理失败，返回原始文件
+                                    resolve(imageFile);
+                                };
+                                
+                                // 加载图片
+                                img.src = URL.createObjectURL(imageFile);
+                            } catch (err) {
+                                console.error('图片预处理错误:', err);
+                                // 出错时返回原始文件
+                                resolve(imageFile);
+                            }
+                        });
+                    },
+                    /**
+                     * 调用DeepSeek API进行结构化抽取
+                     * @param {string} ocrText - OCR识别出来的文本
+                     * @returns {Promise<Array>} - 结构化表计信息数组
+                     */
+                    extractMeterInfoByDeepSeek(ocrText) {
+                        console.log('调用DeepSeek API进行结构化抽取...');
+                        return new Promise((resolve, reject) => {
+                            // 找到最近的AI消息索引，显示处理进度
+                            const aiMsgIndex = this.chatMessages.findIndex(msg => 
+                                msg.type === 'ai' && (
+                                    msg.content.includes('识别文本内容') || 
+                                    msg.content.includes('已识别到以下文本')
+                                )
+                            );
+                            
+                            if (aiMsgIndex !== -1) {
+                                this.$set(this.chatMessages, aiMsgIndex, {
+                                    type: 'ai',
+                                    content: '正在使用AI模型分析表计信息，请稍候...',
+                                    imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                                });
+                            }
+                            
+                            // DeepSeek API 配置
+                            const apiKey = 'sk-930d7f953a8440d98a2c652661de05b4'; // 请替换为您的有效API密钥
+                            const apiEndpoint = 'https://api.deepseek.com/v1/chat/completions';
+                            
+                            // 构建提示词，要求结构化提取表计信息
+                            const prompt = `
+请你作为一个专业的表计信息提取AI助手，从以下文本中识别并提取表计相关信息。
+提取以下关键字段:
+- 表计回路名称 (name)
+- 所属账户 (account)
+- 门牌号 (doorNumber)
+- 变比 (ratio)
+- 抄表时间 (time)
+- 本次读数 (reading)
+
+注意:
+1. 请尽可能提取所有信息，即使某些字段缺失也要返回其他可识别的字段
+2. 识别出所有可能的表计记录，可能存在多条表计记录
+3. 如果提取到多条记录，请以JSON数组格式返回
+4. 如果只有一条记录，也使用数组格式返回
+5. 返回格式必须是标准JSON，字段名使用英文，保持与示例格式一致
+
+请对以下文本进行分析，仅返回JSON格式结果:
+\`\`\`
+${ocrText}
+\`\`\`
+
+JSON格式示例:
+[
+    {
+        "name": "电表123号",
+        "account": "张三",
+        "doorNumber": "101室",
+        "ratio": "1.0",
+        "time": "2023-10-15 14:30",
+        "reading": "1234.5"
+    },
+    {
+        "name": "电表456号",
+        "account": "李四",
+        "doorNumber": "102室",
+        "ratio": "2.0",
+        "time": "2023-10-15 15:00",
+        "reading": "678.9"
+    }
+]
+
+请只返回JSON格式结果，不要有任何前缀或额外说明。
+`;
+
+                            // 准备请求数据
+                            const requestData = {
+                                model: "deepseek-chat",
+                                messages: [
+                                    {
+                                        role: "system", 
+                                        content: "你是一个专业的表计信息提取助手，擅长从OCR文本中提取结构化信息。"
+                                    },
+                                    {
+                                        role: "user",
+                                        content: prompt
+                                    }
+                                ],
+                                temperature: 0.3,  // 较低的温度确保输出更稳定
+                                max_tokens: 2000
+                            };
+                            
+                            // 进行API调用
+                            try {
+                                // 创建超时控制
+                                const timeoutPromise = new Promise((_, timeoutReject) => {
+                                    setTimeout(() => timeoutReject(new Error('DeepSeek API请求超时')), 15000);
+                                });
+                                
+                                // 创建API请求
+                                const fetchPromise = fetch(apiEndpoint, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${apiKey}`
+                                    },
+                                    body: JSON.stringify(requestData)
+                                });
+                                
+                                // 同时发起请求并设置超时
+                                Promise.race([fetchPromise, timeoutPromise])
+                                    .then(response => {
+                                        if (!response.ok) {
+                                            throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+                                        }
+                                        return response.json();
+                                    })
+                                    .then(data => {
+                                        try {
+                                            // 提取AI响应内容
+                                            const aiMessage = data.choices && data.choices[0] && data.choices[0].message;
+                                            const aiContent = aiMessage ? aiMessage.content : '';
+                                            
+                                            if (!aiContent) {
+                                                throw new Error('API返回内容为空');
+                                            }
+                                            
+                                            console.log('DeepSeek API返回原始内容:', aiContent);
+                                            
+                                            // 尝试提取JSON部分
+                                            let jsonContent = aiContent;
+                                            // 如果响应包含反引号，则提取其中的JSON部分
+                                            if (aiContent.includes('```json')) {
+                                                const match = aiContent.match(/```json\s*([\s\S]*?)\s*```/);
+                                                if (match && match[1]) {
+                                                    jsonContent = match[1].trim();
+                                                }
+                                            } else if (aiContent.includes('```')) {
+                                                const match = aiContent.match(/```\s*([\s\S]*?)\s*```/);
+                                                if (match && match[1]) {
+                                                    jsonContent = match[1].trim();
+                                                }
+                                            }
+                                            
+                                            // 解析JSON
+                                            let parsedData;
+                                            try {
+                                                parsedData = JSON.parse(jsonContent);
+                                                console.log('解析成功的JSON数据:', parsedData);
+                                                
+                                                // 确保结果是数组
+                                                if (!Array.isArray(parsedData)) {
+                                                    if (typeof parsedData === 'object') {
+                                                        parsedData = [parsedData]; // 如果是单个对象，转换为数组
+                                                    } else {
+                                                        throw new Error('API返回格式错误，不是有效的数组或对象');
+                                                    }
+                                                }
+                                                
+                                                // 处理结果并返回
+                                                resolve(parsedData);
+                                                
+                                            } catch (jsonError) {
+                                                console.error('JSON解析错误:', jsonError, '原始内容:', jsonContent);
+                                                throw new Error('无法解析API返回的JSON: ' + jsonError.message);
+                                            }
+                                        } catch (processingError) {
+                                            console.error('处理API响应出错:', processingError);
+                                            throw processingError;
+                                        }
+                                    })
+                                    .catch(apiError => {
+                                        console.error('DeepSeek API调用失败:', apiError);
+                                        
+                                        // API调用失败，回退到本地解析
+                                        console.log('API调用失败，回退到本地解析...');
+                                        this.fallbackToLocalParsing(ocrText, aiMsgIndex, resolve, reject);
+                                    });
+                            } catch (error) {
+                                console.error('DeepSeek API调用出错:', error);
+                                // 出错时回退到本地解析
+                                this.fallbackToLocalParsing(ocrText, aiMsgIndex, resolve, reject);
+                            }
+                        });
+                    },
+
+                    // 回退到本地解析的辅助方法
+                    fallbackToLocalParsing(ocrText, aiMsgIndex, resolve, reject) {
+                        if (aiMsgIndex !== -1) {
+                            this.$set(this.chatMessages, aiMsgIndex, {
+                                type: 'ai',
+                                content: 'AI模型调用失败，正在使用本地解析...',
+                                imageUrl: this.chatMessages[aiMsgIndex].imageUrl
+                            });
+                        }
+                        
+                        try {
+                            // 使用本地解析逻辑
+                            const multiRecords = this.parseMultipleRecords(ocrText);
+                            
+                            if (multiRecords && multiRecords.length > 0) {
+                                console.log('本地解析成功，提取到', multiRecords.length, '条记录');
+                                resolve(multiRecords);
+                            } else {
+                                // 单条记录尝试
+                                const parseResult = this.parseUserInput(ocrText);
+                                if (parseResult && parseResult.success) {
+                                    console.log('本地解析成功，提取到单条记录');
+                                    resolve([parseResult.data]);
+                                } else {
+                                    reject(new Error('未能从文本中提取有效的表计信息'));
+                                }
+                            }
+                        } catch (error) {
+                            console.error('本地解析失败:', error);
+                            reject(error);
+                        }
+                    },
+                }
+            });
+            
+            // 全局暴露实例，方便调试
+            window.meterApp = window.app;
+        });
+    </script>
+</body>
+</html> 

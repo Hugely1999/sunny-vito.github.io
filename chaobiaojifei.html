@@ -1,0 +1,2766 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抄表计费</title>
+    <!-- 添加Element Plus的样式和脚本 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus/dist/index.full.js"></script>
+    <script src="https://unpkg.com/@element-plus/icons-vue"></script>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/ai-assistant.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <style>
+        /* 添加内联样式处理图标 */
+        .placeholder-icon {
+            width: 24px;
+            height: 24px;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #666;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+        
+        /* Element Plus 组件样式覆盖 */
+        :root {
+            --el-color-primary: #00B45E !important;
+            --el-color-primary-light-3: #4DC88E !important;
+            --el-color-primary-light-5: #88DCB3 !important;
+            --el-color-primary-light-7: #BDF0D5 !important;
+            --el-color-primary-light-9: #EDFAF5 !important;
+            --el-color-primary-dark-2: #00914B !important;
+        }
+        
+        /* Element Plus 按钮样式覆盖 */
+        .el-button--primary {
+            --el-button-bg-color: #00B45E !important;
+            --el-button-border-color: #00B45E !important;
+            --el-button-hover-bg-color: #00914B !important;
+            --el-button-hover-border-color: #00914B !important;
+        }
+        
+        /* Element Plus Radio按钮样式覆盖 */
+        .el-radio-button__orig-radio:checked + .el-radio-button__inner {
+            background-color: #00B45E !important;
+            border-color: #00B45E !important;
+            box-shadow: -1px 0 0 0 #00B45E !important;
+        }
+        
+        /* Element Plus Checkbox样式覆盖 */
+        .el-checkbox__input.is-checked .el-checkbox__inner {
+            background-color: #00B45E !important;
+            border-color: #00B45E !important;
+        }
+        
+        .el-checkbox__input.is-checked + .el-checkbox__label {
+            color: #00B45E !important;
+        }
+        
+        .el-checkbox.is-bordered.is-checked {
+            border-color: #00B45E !important;
+        }
+        
+                 /* 图表样式 */
+        
+        /* 原有样式保留 */
+        .nav-item.active .placeholder-icon,
+        .subnav-item.active .placeholder-icon {
+            background-color: #00B45E;
+            color: white;
+        }
+        
+        /* 首页内容区域样式调整，与工作台页面保持一致 */
+        .main-content {
+            padding-top: 0 !important;
+        }
+        
+        /* 设置内容区域与头部连接 */
+        .content-wrapper {
+            padding: 0 !important;
+            margin-top: 64px !important; /* 头部高度为64px */
+        }
+        
+        /* dashboard与头部间距 */
+        .dashboard.energy-trend-content {
+            margin-top: 20px;
+        }
+        
+        /* 右侧内容自适应样式 */
+        .right-side .filter-controls,
+        .right-side .energy-stats-overview,
+        .right-side .chart-container {
+            width: 98%;
+            box-sizing: border-box;
+        }
+        
+        /* 确保统计卡片在窄屏幕上自适应 */
+        @media (max-width: 1366px) {
+            .energy-stats-overview-wrapper {
+                padding: 0 10px !important;
+            }
+            
+            .energy-stats-overview {
+                flex-wrap: wrap;
+                justify-content: center;
+                max-width: 98% !important;
+            }
+            
+            .energy-stats-overview .stat-card {
+                min-width: calc(33.33% - 2px);
+                flex: 1 1 calc(33.33% - 2px);
+                border-bottom: 1px solid #EAEAEA;
+            }
+            
+            .energy-stats-overview .stat-card:last-child {
+                border-right: 1px solid #EAEAEA;
+            }
+            
+            /* 日期控制和过滤控制在窄屏上自适应 */
+            .filter-controls {
+                flex-direction: column;
+                gap: 10px;
+                align-items: flex-start;
+                padding: 16px 10px !important;
+                width: 100%;
+                max-width: 100% !important;
+                box-sizing: border-box;
+            }
+            
+            .filter-controls .control-group {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            /* 调整日期控制的布局 */
+            .date-control {
+                flex-wrap: wrap;
+                row-gap: 10px;
+            }
+            
+            /* 确保图表容器在窄屏上自适应 */
+            #usage-query-content {
+                padding: 0 10px !important;
+            }
+            
+            #usage-query-content,
+            #account-usage-content {
+                width: 100% !important;
+                max-width: 100% !important;
+                overflow-x: hidden;
+            }
+        }
+        
+        /* 需要删除之前设置的内部容器max-width */
+        .energy-trend-content {
+            width: 100%;
+            padding: 0 !important;
+        }
+        
+        /* 头部样式调整 */
+        .header {
+            z-index: 100;
+            background: white;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        
+        .header-bottom {
+            height: 24px;
+            display: flex;
+            align-items: center;
+        }
+        
+        /* 确保AI助手不被其他元素遮挡 */
+        .ai-assistant-container {
+            z-index: 10000 !important;
+        }
+        
+        /* 左侧导航样式修改 */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            z-index: 200;
+            width: 80px;
+        }
+        
+        /* 抽屉式二级菜单样式 */
+        .subnav-container {
+            display: none;
+            background-color: white;
+            position: fixed;
+            left: 80px;
+            width: 160px;
+            border-right: 1px solid #EAEAEA;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+            height: calc(100vh - 64px);
+            top: 64px;
+            z-index: 99;
+        }
+        
+        /* 主内容区域调整，为左侧导航腾出空间 */
+        .main-content {
+            margin-left: 80px;
+            padding-top: 0 !important;
+            width: calc(100% - 80px);
+        }
+        
+        /* 当二级导航显示时，主内容区域宽度调整 */
+        .main-content.with-subnav {
+            margin-left: 240px;
+            width: calc(100% - 240px);
+        }
+        
+        /* 租户层级与二级导航间距 */
+        .main-content.with-subnav .left-side {
+            margin-left: 20px;
+        }
+        
+        .subnav-header {
+            padding: 16px;
+            font-weight: 500;
+            color: #333;
+            border-bottom: 1px solid #EAEAEA;
+        }
+        
+        .subnav-list {
+            padding: 8px 0;
+        }
+        
+        .subnav-item {
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .subnav-link {
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .subnav-item:hover {
+            background-color: rgba(0,180,94,0.05);
+        }
+        
+        .subnav-item.active {
+            background-color: rgba(0,180,94,0.1);
+            position: relative;
+        }
+        
+        .subnav-item span {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .subnav-item.active span {
+            color: #00B45E;
+            font-weight: 500;
+        }
+
+        /* 媒体查询保持与其他页面一致 */
+        @media (max-width: 1600px), (max-width: 1200px) {
+            .content-wrapper {
+                padding: 0 !important;
+            }
+        }
+        
+        .subnav-container.visible {
+            display: block;
+        }
+
+        /* 节点树样式 */
+        .node-tree {
+            margin: 0; /* 确保上下间距贴合边框 */
+            padding: 0; /* 内边距 */
+            background-color: white;
+        }
+        
+        /* Element UI Tree组件样式 */
+        .el-card__body {
+            background-color: white;
+        }
+
+        .node-item {
+            padding: 4px 0; /* 节点项的上下间距 */
+            border-bottom: 1px solid #EAEAEA; /* 节点项之间的分隔线 */
+            cursor: pointer;
+        }
+
+        .node-item:last-child {
+            border-bottom: none; /* 最后一个节点项不显示分隔线 */
+        }
+        
+        .node-content {
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        
+        .node-content:hover {
+            background-color: rgba(0,180,94,0.05);
+        }
+        
+        .node-item.selected > .node-content {
+            background-color: rgba(0,180,94,0.1);
+        }
+        
+        .node-item.selected > .node-content span {
+            color: #00B45E;
+            font-weight: 500;
+        }
+        
+        .node-content span {
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .node-children {
+            margin-left: 0;
+        }
+        
+        /* 多任务标签样式 */
+        .tab.multitask {
+            display: flex;
+            align-items: center;
+            color: #666;
+            font-size: 14px;
+            position: relative;
+            height: 100%;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        
+        .header-bottom .tabs .tab.multitask {
+            opacity: 1;
+            visibility: visible;
+            white-space: nowrap;
+            line-height: 24px; /* 与header-bottom高度保持一致 */
+        }
+
+        /* 修改内容区域padding和间距 */
+        .energy-query-section {
+            background: #fff;
+            padding: 0;
+            margin-bottom: 16px;
+            border-radius: 4px;
+            position: relative;
+            top: 0;
+            box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05);
+        }
+
+        .tabs-container {
+            display: flex;
+            border-bottom: 1px solid #E0E4E8;
+            padding: 0 24px;
+            margin-top: 0;
+        }
+
+        .tab {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0px 16px;
+            margin-right: 32px;
+            cursor: pointer;
+            position: relative;
+        }
+
+        /* 防止横向滚动条出现 */
+        body, html {
+            overflow-x: hidden;
+            max-width: 100%;
+        }
+
+        /* 修改能耗数据概览样式 */
+        .energy-stats-overview-wrapper {
+            display: flex;
+            justify-content: center;
+            padding: 0 20px;
+        }
+
+        .energy-stats-overview {
+            max-width: 1200px;
+            width: 100%;
+            display: flex;
+            margin-bottom: 16px;
+            margin-top: 0;
+            gap: 0;
+            justify-content: center;
+        }
+
+        .stat-card {
+            background-color: #F8FAFB;
+            padding: 16px 24px;
+            border-radius: 0;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 120px;
+            box-sizing: border-box;
+            border-right: 1px solid #EAEAEA;
+            text-align: center;
+        }
+
+        /* 复选框控制样式 */
+        .checkbox-control {
+            display: flex;
+            align-items: center;
+            gap: 16px; /* 调整间距 */
+        }
+
+        /* 复选框样式 */
+        .checkbox-control input[type="checkbox"] {
+            position: relative;
+            width: 16px;
+            height: 16px;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            outline: none;
+            border: 1px solid #CBCFD4;
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        .checkbox-control input[type="checkbox"]:checked {
+            border-color: #29B061;
+            background-color: #29B061;
+        }
+
+        .checkbox-control input[type="checkbox"]:checked::before {
+            content: '✓';
+            color: white;
+            position: absolute;
+            font-size: 12px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .checkbox-control label {
+            font-size: 14px;
+            color: #29B061;
+        }
+
+        /* 确保电能筛选框的样式一致 */
+        .control-group {
+            display: flex;
+            gap: 16px; /* 与复选框间距一致 */
+            align-items: center;
+        }
+
+        /* 修改 el-checkbox 的样式 */
+        .el-checkbox {
+            width: 50px; /* 设置宽度为 50px */
+            border: none; /* 去掉边框效果 */
+        }
+
+        .el-checkbox.is-bordered {
+            border: none; /* 确保边框样式为 none */
+        }
+
+        .el-checkbox__input {
+            border: none; /* 去掉复选框的边框 */
+        }
+
+        .el-checkbox__label {
+            margin-left: 0; /* 调整标签的左边距 */
+        }
+        
+        /* Element Plus 日期选择器样式 */
+        .el-date-editor.el-input,
+        .el-date-editor.el-input__inner {
+            width: 100%;
+        }
+        
+        .el-input__inner {
+            -webkit-appearance: none;
+            background-color: #FFF;
+            background-image: none;
+            border-radius: 4px;
+            border: 1px solid #DCDFE6;
+            box-sizing: border-box;
+            color: #606266;
+            display: inline-block;
+            font-size: 14px;
+            height: 32px;
+            line-height: 32px;
+            outline: none;
+            padding: 0 15px;
+            transition: border-color .2s cubic-bezier(.645,.045,.355,1);
+            width: 100%;
+        }
+        
+        .el-input__prefix {
+            position: absolute;
+            height: 100%;
+            left: 5px;
+            top: 0;
+            text-align: center;
+            color: #C0C4CC;
+            transition: all .3s;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+        }
+        
+        .el-input__suffix {
+            position: absolute;
+            height: 100%;
+            right: 5px;
+            top: 0;
+            text-align: center;
+            color: #C0C4CC;
+            transition: all .3s;
+            display: flex;
+            align-items: center;
+        }
+        
+        .el-date-editor .el-input__inner {
+            padding-left: 30px;
+        }
+        
+        .el-input--prefix .el-input__inner {
+            padding-left: 30px;
+        }
+        
+        .el-input--suffix .el-input__inner {
+            padding-right: 30px;
+        }
+        
+        /* 下拉菜单样式 */
+        .el-select-dropdown {
+            margin: 5px 0;
+            border-radius: 4px;
+            box-shadow: 0 2px 12px 0 rgba(0,0,0,.1);
+            box-sizing: border-box;
+            max-height: 300px;
+            overflow: auto;
+        }
+        
+        .el-select-dropdown__item {
+            font-size: 14px;
+            padding: 0 20px;
+            position: relative;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #606266;
+            height: 34px;
+            line-height: 34px;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+        
+        .el-select-dropdown__item.selected {
+            color: #00B45E;
+            font-weight: 700;
+        }
+        
+        .el-select-dropdown__item:hover {
+            background-color: #F5F7FA;
+        }
+
+        /* 添加搜索高亮样式 */
+        .highlight {
+            background-color: #FFFAA8;
+            color: #333;
+            padding: 0 2px;
+            border-radius: 2px;
+            font-weight: 500;
+        }
+
+        .el-input__wrapper {
+            padding: 0; /* 去掉padding */
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <!-- 左侧导航 -->
+        <div class="sidebar">
+            <div class="logo-container">
+                <div class="logo">
+                    <div class="placeholder-icon" style="background-color: #00B45E; color: white;">CE</div>
+                </div>
+            </div>
+            <div class="nav-container">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a href="home.html" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">首</div>
+                            </div>
+                            <span>首页</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="index.html" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">工</div>
+                            </div>
+                            <span>工作台</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="power-monitoring.html" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">电</div>
+                            </div>
+                            <span>电力监控</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="power-analysis.html" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">分</div>
+                            </div>
+                            <span>电能分析</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">成</div>
+                            </div>
+                            <span>成本分析</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">新</div>
+                            </div>
+                            <span>新能源</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon">碳</div>
+                            </div>
+                            <span>碳资产</span>
+                        </a>
+                    </li>
+                    <li class="nav-item active">
+                        <a href="#" class="nav-link" id="safetyMenuItem">
+                            <div class="nav-icon">
+                                <div class="placeholder-icon" style="background-color: #00B45E; color: white;">安</div>
+                            </div>
+                            <span>安全用电</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 二级抽屉式导航 -->
+        <div class="subnav-container visible">
+            <div class="subnav-header">安全用电</div>
+            <ul class="subnav-list">
+                <li class="subnav-item">
+                    <a href="energy-trend.html" class="subnav-link" data-page="energy-trend">
+                        <span>能耗趋势分析</span>
+                    </a>
+                </li>
+                <li class="subnav-item">
+                    <a href="monthly-bill.html" class="subnav-link" data-page="monthly-bill">
+                        <span>月度账单</span>
+                    </a>
+                </li>
+                <li class="subnav-item active">
+                    <a href="chaobiaojifei.html" class="subnav-link" data-page="chaobiaojifei">
+                        <span>抄表计费</span>
+                    </a>
+                </li>
+                <li class="subnav-item">
+                    <a href="#" class="subnav-link" data-page="archive-management">
+                        <span>档案管理</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="main-content with-subnav">
+            <!-- 头部导航区 -->
+            <header class="header">
+                <div class="header-top">
+                    <div class="nav-toggle" id="navToggle">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M3 12H21" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3 6H21" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M3 18H21" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <div class="breadcrumb active">
+                        <span>安全用电 / 抄表计费</span>
+                    </div>
+                    <div class="user-area">
+                        <div class="icon-group">
+                            <div class="icon-circle">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M21 21L16.65 16.65" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </div>
+                            <div class="icon-circle">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M19 14C19 11.7909 16.7614 10 14 10H12.8184C10.6702 10 8.71062 9.00736 7.55375 7.31655C7.30044 6.9535 7 5.93336 7 5.93335C7 5.31352 7.62791 4.78719 8.25574 4.8643C11.303 5.16203 13.0274 5.88513 15.0858 7.94353C16.634 9.49176 19 10.9789 19 14Z" stroke="#666" stroke-width="2"/>
+                                    <path d="M19 14V18C19 19.1046 18.1046 20 17 20H7C5.89543 20 5 19.1046 5 18V6C5 4.89543 5.89543 4 7 4" stroke="#666" stroke-width="2" stroke-linecap="round"/>
+                                </svg>
+                            </div>
+                            <div class="icon-circle">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M18 8C18 6.4087 17.3679 4.88258 16.2426 3.75736C15.1174 2.63214 13.5913 2 12 2C10.4087 2 8.88258 2.63214 7.75736 3.75736C6.63214 4.88258 6 6.4087 6 8C6 15 3 17 3 17H21C21 17 18 15 18 8Z" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M13.73 21C13.5542 21.3031 13.3019 21.5547 12.9982 21.7295C12.6946 21.9044 12.3504 21.9965 12 21.9965C11.6496 21.9965 11.3054 21.9044 11.0018 21.7295C10.6982 21.5547 10.4458 21.3031 10.27 21" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </div>
+                            <div class="icon-circle">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M19.4 15C19.2669 15.3016 19.2272 15.6362 19.286 15.9606C19.3448 16.285 19.4995 16.5843 19.73 16.82L19.79 16.88C19.976 17.0657 20.1235 17.2863 20.2241 17.5291C20.3248 17.7719 20.3766 18.0322 20.3766 18.295C20.3766 18.5578 20.3248 18.8181 20.2241 19.0609C20.1235 19.3037 19.976 19.5243 19.79 19.71C19.6043 19.896 19.3837 20.0435 19.1409 20.1441C18.8981 20.2448 18.6378 20.2966 18.375 20.2966C18.1122 20.2966 17.8519 20.2448 17.6091 20.1441C17.3663 20.0435 17.1457 19.896 16.96 19.71L16.9 19.65C16.6643 19.4195 16.365 19.2648 16.0406 19.206C15.7162 19.1472 15.3816 19.1869 15.08 19.32C14.7842 19.4468 14.532 19.6572 14.3543 19.9255C14.1766 20.1938 14.0813 20.5082 14.08 20.83V21C14.08 21.5304 13.8693 22.0391 13.4942 22.4142C13.1191 22.7893 12.6104 23 12.08 23C11.5496 23 11.0409 22.7893 10.6658 22.4142C10.2907 22.0391 10.08 21.5304 10.08 21V20.91C10.0723 20.579 9.96512 20.258 9.77251 19.9887C9.5799 19.7194 9.31074 19.5143 9 19.4C8.69838 19.2669 8.36381 19.2272 8.03941 19.286C7.71502 19.3448 7.41568 19.4995 7.18 19.73L7.12 19.79C6.93425 19.976 6.71368 20.1235 6.47088 20.2241C6.22808 20.3248 5.96783 20.3766 5.705 20.3766C5.44217 20.3766 5.18192 20.3248 4.93912 20.2241C4.69632 20.1235 4.47575 19.976 4.29 19.79C4.10405 19.6043 3.95653 19.3837 3.85588 19.1409C3.75523 18.8981 3.70343 18.6378 3.70343 18.375C3.70343 18.1122 3.75523 17.8519 3.85588 17.6091C3.95653 17.3663 4.10405 17.1457 4.29 16.96L4.35 16.9C4.58054 16.6643 4.73519 16.365 4.794 16.0406C4.85282 15.7162 4.81312 15.3816 4.68 15.08C4.55324 14.7842 4.34276 14.532 4.07447 14.3543C3.80618 14.1766 3.49179 14.0813 3.17 14.08H3C2.46957 14.08 1.96086 13.8693 1.58579 13.4942C1.21071 13.1191 1 12.6104 1 12.08C1 11.5496 1.21071 11.0409 1.58579 10.6658C1.96086 10.2907 2.46957 10.08 3 10.08H3.09C3.42099 10.0723 3.742 9.96512 4.0113 9.77251C4.28059 9.5799 4.48572 9.31074 4.6 9C4.73312 8.69838 4.77282 8.36381 4.714 8.03941C4.65519 7.71502 4.50054 7.41568 4.27 7.18L4.21 7.12C4.02405 6.93425 3.87653 6.71368 3.77588 6.47088C3.67523 6.22808 3.62343 5.96783 3.62343 5.705C3.62343 5.44217 3.67523 5.18192 3.77588 4.93912C3.87653 4.69632 4.02405 4.47575 4.21 4.29C4.39575 4.10405 4.61632 3.95653 4.85912 3.85588C5.10192 3.75523 5.36217 3.70343 5.625 3.70343C5.88783 3.70343 6.14808 3.75523 6.39088 3.85588C6.63368 3.95653 6.85425 4.10405 7.04 4.29L7.1 4.35C7.33568 4.58054 7.63502 4.73519 7.95941 4.794C8.28381 4.85282 8.61838 4.81312 8.92 4.68H9C9.29577 4.55324 9.54802 4.34276 9.72569 4.07447C9.90337 3.80618 9.99872 3.49179 10 3.17V3C10 2.46957 10.2107 1.96086 10.5858 1.58579C10.9609 1.21071 11.4696 1 12 1C12.5304 1 13.0391 1.21071 13.4142 1.58579C13.7893 1.96086 14 2.46957 14 3V3.09C14.0013 3.41179 14.0966 3.72618 14.2743 3.99447C14.452 4.26276 14.7042 4.47324 15 4.6C15.3016 4.73312 15.6362 4.77282 15.9606 4.714C16.285 4.65519 16.5843 4.50054 16.82 4.27L16.88 4.21C17.0657 4.02405 17.2863 3.87653 17.5291 3.77588C17.7719 3.67523 18.0322 3.62343 18.295 3.62343C18.5578 3.62343 18.8181 3.67523 19.0609 3.77588C19.3037 3.87653 19.5243 4.02405 19.71 4.21C19.896 4.39575 20.0435 4.61632 20.1441 4.85912C20.2448 5.10192 20.2966 5.36217 20.2966 5.625C20.2966 5.88783 20.2448 6.14808 20.1441 6.39088C20.0435 6.63368 19.896 6.85425 19.71 7.04L19.65 7.1C19.4195 7.33568 19.2648 7.63502 19.206 7.95941C19.1472 8.28381 19.1869 8.61838 19.32 8.92V9C19.4468 9.29577 19.6572 9.54802 19.9255 9.72569C20.1938 9.90337 20.5082 9.99872 20.83 10H21C21.5304 10 22.0391 10.2107 22.4142 10.5858C22.7893 10.9609 23 11.4696 23 12C23 12.5304 22.7893 13.0391 22.4142 13.4142C22.0391 13.7893 21.5304 14 21 14H20.91C20.5882 14.0013 20.2738 14.0966 20.0055 14.2743C19.7372 14.452 19.5268 14.7042 19.4 15Z" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="user-info">
+                            <div class="avatar">ZM</div>
+                            <p class="user-name">张淼妙</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-bottom">
+                    <div class="tabs">
+                        <div class="tab active">抄表计费</div>
+                        <div class="tab multitask">多任务菜单</div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 月度账单内容区域 -->
+            <div class="content-wrapper">
+                <div class="dashboard energy-trend-content" style="display: flex; flex-direction: row; gap: 20px; height: 860px;">
+                    <!-- 左侧搜索和节点树 -->
+                    <div class="left-side" style="width: 240px; flex-shrink: 0; margin-top: 0;">
+                        <!-- 搜索框和节点树卡片 -->
+                        <div class="el-card" style="box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1); border-radius: 4px; border: 1px solid #EBEEF5; background-color: white; height: 860px;">
+                            <div class="el-card__header" style="padding: 12px 16px; border-bottom: 1px solid #EBEEF5;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 14px; color: #303133; font-weight: 500;">租户列表</span>
+                                </div>
+                            </div>
+                            <div class="el-card__body" style="padding: 16px 16px 0;">
+                                <div class="el-input" style="position: relative; width: 100%; margin-bottom: 16px;">
+                                    <input type="text" placeholder="请输入关键字" class="el-input__inner" style="width: 100%; height: 32px; line-height: 32px; padding: 0 30px 0 15px; background-color: #FFFFFF; background-image: none; border-radius: 4px; border: 1px solid #DCDFE6; box-sizing: border-box; color: #606266; font-size: 14px;">
+                                    <span class="el-input__suffix" style="position: absolute; height: 100%; right: 5px; top: 0; text-align: center; color: #C0C4CC; font-size: 14px; line-height: 32px;">
+                                        <i class="el-icon-search" style="color: #909399;">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M11 19C15.4183 19 19 15.4183 19 11C19 6.58172 15.4183 3 11 3C6.58172 3 3 6.58172 3 11C3 15.4183 6.58172 19 11 19Z" stroke="#909399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                                <path d="M21 21L16.65 16.65" stroke="#909399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
+                                        </i>
+                                    </span>
+                                </div>
+                                <div style="border-top: 1px solid #EBEEF5; margin: 0 -16px;"></div>
+                            </div>
+                            <div class="el-card__body" style="padding: 0;">
+                                <div class="el-tree" style="width: 100%; height: calc(100% - 130px); overflow-y: auto; margin-top: 0; background-color: white;">
+                                    <!-- 树形控件层级结构 -->
+                                    <div class="el-tree-node is-expanded" style="padding: 0;">
+                                        <div class="el-tree-node__content" style="padding: 8px 18px; height: 32px; display: flex; align-items: center; cursor: pointer; background-color: white;">
+                                            <span class="el-tree-node__expand-icon expanded" style="transform: rotate(90deg); margin-right: 8px; font-size: 12px; color: #909399;">
+                                                <svg viewBox="0 0 1024 1024" width="12" height="12">
+                                                    <path d="M857.70558 495.009024 397.943314 27.513634c-7.132444-7.251148-18.794042-7.350408-26.048259-0.216941-7.253194 7.132444-7.350408 18.795065-0.216941 26.048259l446.952518 454.470749L371.678114 962.287215c-7.132444 7.253194-7.036254 18.915839 0.216941 26.048259 3.605916 3.540471 8.286527 5.309695 12.915659 5.309695 4.752048 0 9.502049-1.856601 13.13260-5.5266 459.762267-467.495389 459.762267-467.495389 459.762267-492.559545L857.70558 495.009024z" fill="#C0C4CC"></path>
+                                                </svg>
+                                            </span>
+                                            <span class="el-tree-node__label" style="font-size: 14px; color: #606266;">所有租户</span>
+                                        </div>
+                                        <div class="el-tree-node__children" style="padding-left: 18px;">
+                                            <!-- 恒和园节点及子节点 -->
+                                            <div class="el-tree-node is-expanded is-current" style="padding: 0;">
+                                                <div class="el-tree-node__content" style="padding: 8px 18px; height: 32px; display: flex; align-items: center; cursor: pointer; background-color: #F5F7FA;">
+                                                    <span class="el-tree-node__expand-icon expanded" style="transform: rotate(90deg); margin-right: 8px; font-size: 12px; color: #909399;">
+                                                        <svg viewBox="0 0 1024 1024" width="12" height="12">
+                                                            <path d="M857.70558 495.009024 397.943314 27.513634c-7.132444-7.251148-18.794042-7.350408-26.048259-0.216941-7.253194 7.132444-7.350408 18.795065-0.216941 26.048259l446.952518 454.470749L371.678114 962.287215c-7.132444 7.253194-7.036254 18.915839 0.216941 26.048259 3.605916 3.540471 8.286527 5.309695 12.915659 5.309695 4.752048 0 9.502049-1.856601 13.13260-5.5266 459.762267-467.495389 459.762267-467.495389 459.762267-492.559545L857.70558 495.009024z" fill="#409EFF"></path>
+                                                        </svg>
+                                                    </span>
+                                                    <span class="el-tree-node__label" style="font-size: 14px; color: #409EFF; font-weight: 500;">恒和园</span>
+                                                </div>
+                                                <div class="el-tree-node__children" style="padding-left: 18px;">
+                                                    <div class="el-tree-node" style="padding: 0;">
+                                                        <div class="el-tree-node__content" style="padding: 8px 18px; height: 32px; display: flex; align-items: center; cursor: pointer; background-color: white;">
+                                                            <span class="el-tree-node__expand-icon is-leaf" style="visibility: hidden; margin-right: 8px; font-size: 12px; color: #909399;">
+                                                                <svg viewBox="0 0 1024 1024" width="12" height="12">
+                                                                    <path d="M857.70558 495.009024 397.943314 27.513634c-7.132444-7.251148-18.794042-7.350408-26.048259-0.216941-7.253194 7.132444-7.350408 18.795065-0.216941 26.048259l446.952518 454.470749L371.678114 962.287215c-7.132444 7.253194-7.036254 18.915839 0.216941 26.048259 3.605916 3.540471 8.286527 5.309695 12.915659 5.309695 4.752048 0 9.502049-1.856601 13.13260-5.5266 459.762267-467.495389 459.762267-467.495389 459.762267-492.559545L857.70558 495.009024z" fill="#C0C4CC"></path>
+                                                                </svg>
+                                                            </span>
+                                                            <span class="el-tree-node__label" style="font-size: 14px; color: #606266;">恒和园一层</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="el-tree-node" style="padding: 0;">
+                                                        <div class="el-tree-node__content" style="padding: 8px 18px; height: 32px; display: flex; align-items: center; cursor: pointer; background-color: white;">
+                                                            <span class="el-tree-node__expand-icon is-leaf" style="visibility: hidden; margin-right: 8px; font-size: 12px; color: #909399;">
+                                                                <svg viewBox="0 0 1024 1024" width="12" height="12">
+                                                                    <path d="M857.70558 495.009024 397.943314 27.513634c-7.132444-7.251148-18.794042-7.350408-26.048259-0.216941-7.253194 7.132444-7.350408 18.795065-0.216941 26.048259l446.952518 454.470749L371.678114 962.287215c-7.132444 7.253194-7.036254 18.915839 0.216941 26.048259 3.605916 3.540471 8.286527 5.309695 12.915659 5.309695 4.752048 0 9.502049-1.856601 13.13260-5.5266 459.762267-467.495389 459.762267-467.495389 459.762267-492.559545L857.70558 495.009024z" fill="#C0C4CC"></path>
+                                                                </svg>
+                                                            </span>
+                                                            <span class="el-tree-node__label" style="font-size: 14px; color: #606266;">恒和园二层</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 知春园南区节点 -->
+                                            <div class="el-tree-node" style="padding: 0;">
+                                                <div class="el-tree-node__content" style="padding: 8px 18px; height: 32px; display: flex; align-items: center; cursor: pointer; background-color: white;">
+                                                    <span class="el-tree-node__expand-icon" style="margin-right: 8px; font-size: 12px; color: #909399;">
+                                                        <!-- <svg viewBox="0 0 1024 1024" width="12" height="12">
+                                                            <path d="M857.70558 495.009024 397.943314 27.513634c-7.132444-7.251148-18.794042-7.350408-26.048259-0.216941-7.253194 7.132444-7.350408 18.795065-0.216941 26.048259l446.952518 454.470749L371.678114 962.287215c-7.132444 7.253194-7.036254 18.915839 0.216941 26.048259 3.605916 3.540471 8.286527 5.309695 12.915659 5.309695 4.752048 0 9.502049-1.856601 13.13260-5.5266 459.762267-467.495389 459.762267-467.495389 459.762267-492.559545L857.70558 495.009024z" fill="#C0C4CC"></path>
+                                                        </svg> -->
+                                                    </span>
+                                                    <span class="el-tree-node__label" style="font-size: 14px; color: #606266;">知春园南区</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 知春园东区节点 -->
+                                            <div class="el-tree-node" style="padding: 0;">
+                                                <div class="el-tree-node__content" style="padding: 8px 18px; height: 32px; display: flex; align-items: center; cursor: pointer; background-color: white;">
+                                                    <span class="el-tree-node__expand-icon" style="margin-right: 8px; font-size: 12px; color: #909399;">
+                                                        <!-- <svg viewBox="0 0 1024 1024" width="12" height="12">
+                                                            <path d="M857.70558 495.009024 397.943314 27.513634c-7.132444-7.251148-18.794042-7.350408-26.048259-0.216941-7.253194 7.132444-7.350408 18.795065-0.216941 26.048259l446.952518 454.470749L371.678114 962.287215c-7.132444 7.253194-7.036254 18.915839 0.216941 26.048259 3.605916 3.540471 8.286527 5.309695 12.915659 5.309695 4.752048 0 9.502049-1.856601 13.13260-5.5266 459.762267-467.495389 459.762267-467.495389 459.762267-492.559545L857.70558 495.009024z" fill="#C0C4CC"></path>
+                                                        </svg> -->
+                                                    </span>
+                                                    <span class="el-tree-node__label" style="font-size: 14px; color: #606266;">知春园东区</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- 锦秋园节点 -->
+                                            <div class="el-tree-node" style="padding: 0;">
+                                                <div class="el-tree-node__content" style="padding: 8px 18px; height: 32px; display: flex; align-items: center; cursor: pointer; background-color: white;">
+                                                    <span class="el-tree-node__expand-icon" style="margin-right: 8px; font-size: 12px; color: #909399;">
+                                                        <!-- <svg viewBox="0 0 1024 1024" width="12" height="12">
+                                                            <path d="M857.70558 495.009024 397.943314 27.513634c-7.132444-7.251148-18.794042-7.350408-26.048259-0.216941-7.253194 7.132444-7.350408 18.795065-0.216941 26.048259l446.952518 454.470749L371.678114 962.287215c-7.132444 7.253194-7.036254 18.915839 0.216941 26.048259 3.605916 3.540471 8.286527 5.309695 12.915659 5.309695 4.752048 0 9.502049-1.856601 13.13260-5.5266 459.762267-467.495389 459.762267-467.495389 459.762267-492.559545L857.70558 495.009024z" fill="#C0C4CC"></path>
+                                                        </svg> -->
+                                                    </span>
+                                                    <span class="el-tree-node__label" style="font-size: 14px; color: #606266;">锦秋园</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 右侧抄表计费列表 -->
+                    <div class="right-side" style="flex: 1; overflow-y: hidden; margin-top: 0;">
+                        <!-- 抄表计费列表 -->
+                        <div class="el-card" style="box-shadow: 0 2px 12px 0 rgba(0,0,0,0.1); border-radius: 4px; border: 1px solid #EBEEF5; background-color: white; margin-bottom: 20px; height: 860px; display: flex; flex-direction: column;">
+                            <!-- 表格类型切换Tab - 置顶 -->
+                            <div class="table-tabs" style="display: flex; border-bottom: 1px solid #E0E4E8; padding: 0 16px; flex-shrink: 0; background-color: #fff;">
+                                <div class="table-tab active" data-type="day" style="padding: 12px 16px; cursor: pointer; position: relative; color: #00B45E; font-weight: 500;">
+                                    日表
+                                    <div style="position: absolute; bottom: -1px; left: 0; width: 100%; height: 2px; background-color: #00B45E;"></div>
+                                </div>
+                                <div class="table-tab" data-type="month" style="padding: 12px 16px; cursor: pointer; position: relative; color: #606266;">
+                                    月表
+                                </div>
+                                <div class="table-tab" data-type="custom" style="padding: 12px 16px; cursor: pointer; position: relative; color: #606266;">
+                                    自定义时段
+                                </div>
+                            </div>
+
+                            <!-- 抄表列表内容 -->
+                            <div class="el-card__header" style="padding: 12px 16px; border-bottom: 1px solid #EBEEF5; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                                <div style="display: flex; align-items: center;">
+                                    <span style="font-size: 14px; color: #606266; font-weight: 500;" id="selectedTenantName">恒和园</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 16px;">
+                                    <!-- 搜索框 - 使用Element Plus官方组件 -->
+                                    <div id="search-container" style="width: 240px;">
+                                        <!-- 搜索组件会被Vue渲染 -->
+                                    </div>
+                                    
+                                    <!-- 日期选择器 - Vue组件 -->
+                                    <div id="date-picker-app" style="width: 220px;">
+                                        <!-- Vue日期选择器将在这里渲染 -->
+                                    </div>
+                                    
+                                    <!-- 能源类型筛选器 - 修改为默认选中电能 -->
+                                    <div class="el-select" style="width: 160px;">
+                                        <div class="el-input el-input--suffix">
+                                            <input type="text" readonly="readonly" autocomplete="off" class="el-input__inner" id="energyTypeSelect" style="height: 32px; line-height: 32px; padding: 0 8px 0 15px; border-radius: 4px; border: 1px solid #DCDFE6; background-color: #F5F7FA; cursor: default;">
+                                            <div style="position: absolute; left: 15px; top: 0; height: 100%; display: flex; align-items: center;">
+                                                <span style="color: #00B45E; font-size: 14px;">能源类型</span>
+                                                <span style="margin-left: 8px; color: #606266; font-size: 14px;" id="selectedEnergyType">电能</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 导出按钮和录入按钮保持相同宽度和间距 -->
+                                    <button class="el-button el-button--default" id="exportExcelBtn" style="height: 32px; padding: 8px 16px; border-radius: 4px; font-size: 14px; cursor: pointer; border: 1px solid #DCDFE6; background-color: white; color: #606266; margin-right: 0px; width: 80px;">
+                                        导出
+                                    </button>
+                                    
+                                    <!-- 录入按钮 -->
+                                    <button class="el-button el-button--primary" id="inputMeterBtn" style="height: 32px; padding: 8px 16px; border-radius: 4px; font-size: 14px; cursor: pointer; border: none; background-color: #00B45E; color: white; width: 80px; margin-left: 0px;">
+                                        录入
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- 表格内容 -->
+                            <div class="el-table" style="width: 100%; flex: 1; overflow: auto; display: flex; flex-direction: column; position: relative;">
+                                <!-- 表格容器 -->
+                                <div class="table-container" style="overflow-x: auto; height: 100%; min-width: 100%;">
+                                    <table style="width: auto; min-width: 4000px; border-collapse: collapse; table-layout: fixed;">
+                                        <colgroup>
+                                            <col width="120"> <!-- 序号 -->
+                                            <col width="120"> <!-- 表计回路名称 -->
+                                            <col width="120"> <!-- 账户名称 -->
+                                            <col width="100"> <!-- 门牌号 -->
+                                            <col width="80"> <!-- 变比 -->
+                                            <col width="100"> <!-- 日/月用量 -->
+                                            <!-- 动态列将在JS中添加 -->
+                                        </colgroup>
+                                        <thead>
+                                            <tr id="hourlyHeaders">
+                                                <th style="position: sticky; left: 0; z-index: 3; background-color: #FAFCFF; padding: 0 8px; text-align: center; font-size: 12px; font-weight: 400; color: #424E5F; border: 1px solid #EBEEF5; width: 120px; box-sizing: border-box; height: 50px; line-height: 50px;">序号</th>
+                                                <th style="position: sticky; left: 120px; z-index: 3; background-color: #FAFCFF; padding: 0 8px; text-align: center; font-size: 12px; font-weight: 400; color: #424E5F; border: 1px solid #EBEEF5; width: 120px; box-sizing: border-box; height: 50px; line-height: 50px;">表计回路名称</th>
+                                                <th style="position: sticky; left: 240px; z-index: 3; background-color: #FAFCFF; padding: 0 8px; text-align: center; font-size: 12px; font-weight: 400; color: #424E5F; border: 1px solid #EBEEF5; width: 120px; box-sizing: border-box; height: 50px; line-height: 50px;">账户名称</th>
+                                                <th style="position: sticky; left: 360px; z-index: 3; background-color: #FAFCFF; padding: 0 8px; text-align: center; font-size: 12px; font-weight: 400; color: #424E5F; border: 1px solid #EBEEF5; width: 100px; box-sizing: border-box; height: 50px; line-height: 50px;">门牌号</th>
+                                                <th style="position: sticky; left: 460px; z-index: 3; background-color: #FAFCFF; padding: 0 8px; text-align: center; font-size: 12px; font-weight: 400; color: #424E5F; border: 1px solid #EBEEF5; width: 80px; box-sizing: border-box; height: 50px; line-height: 50px;">变比</th>
+                                                <th style="position: sticky; left: 540px; z-index: 3; background-color: #FAFCFF; padding: 0 8px; text-align: center; font-size: 12px; font-weight: 400; color: #424E5F; border: 1px solid #EBEEF5; width: 100px; box-sizing: border-box; height: 50px; line-height: 50px;" id="usageHeader">日用量</th>
+                                                <!-- 动态小时表头 -->
+                                                <!-- 这里动态添加的列 -->
+                                            </tr>
+                                        </thead>
+                                        <tbody id="meterDataTable">
+                                            <!-- 表格数据行 -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- 分页器 -->
+                            <div class="el-pagination is-background" style="padding: 16px 24px; text-align: right; margin-top: auto; border-top: 1px solid #EBEEF5; flex-shrink: 0; display: flex; justify-content: flex-end; align-items: center;">
+                                <span class="el-pagination__total" style="margin-right: 16px; font-size: 13px; color: #606266;">共 0 条</span>
+                                <span class="el-pagination__sizes" style="margin-right: 16px;">
+                                    <div class="el-select el-select--mini" style="margin-right: 16px;">
+                                        <div class="el-input el-input--mini el-input--suffix" style="width: 110px;">
+                                            <input type="text" readonly="readonly" autocomplete="off" placeholder="请选择" class="el-input__inner" value="10 条/页" style="height: 28px; line-height: 28px; font-size: 13px; border-radius: 3px; padding: 0 8px 0 10px; border: 1px solid #DCDFE6;">
+                                            <span class="el-input__suffix" style="right: 5px;">
+                                                <span class="el-input__suffix-inner">
+                                                    <i class="el-select__caret el-input__icon el-icon-arrow-up is-reverse" style="color: #C0C4CC; font-size: 13px;">
+                                                        <svg viewBox="0 0 1024 1024" width="12" height="12">
+                                                            <path d="M840.4 300H183.6c-19.7 0-30.7 20.8-18.5 35l328.4 380.8c9.4 10.9 27.5 10.9 37 0L858.9 335c12.2-14.2 1.2-35-18.5-35z" fill="#C0C4CC"></path>
+                                                        </svg>
+                                                    </i>
+                                                </span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </span>
+                                <button type="button" disabled="disabled" class="btn-prev" style="margin: 0 5px; background-color: #f4f4f5; min-width: 30px; height: 32px; border: none; border-radius: 2px; padding: 0; cursor: pointer; color: #606266;">
+                                    <i class="el-icon el-icon-arrow-left" style="font-size: 13px;">
+                                        <svg viewBox="0 0 1024 1024" width="12" height="12">
+                                            <path d="M561.873 752c8.19 0 16.379-3.124 22.628-9.372 12.496-12.497 12.496-32.759 0-45.256L432.125 544l152.376-153.373c12.496-12.497 12.496-32.758 0-45.255-12.498-12.497-32.758-12.497-45.256 0l-174.803 175.999c-12.496 12.497-12.496 32.759 0 45.256l174.802 176.0c6.249 6.249 14.439 9.373 22.629 9.373z" fill="#C0C4CC"></path>
+                                        </svg>
+                                    </i>
+                                </button>
+                                <ul class="el-pager" style="list-style: none; padding: 0; margin: 0; display: flex; font-size: 13px;">
+                                    <li class="number active" style="min-width: 30px; height: 32px; line-height: 32px; text-align: center; margin: 0 5px; cursor: pointer; color: #fff; background-color: #00B45E; border-radius: 2px; font-weight: bold;">1</li>
+                                </ul>
+                                <button type="button" disabled="disabled" class="btn-next" style="margin: 0 5px; background-color: #f4f4f5; min-width: 30px; height: 32px; border: none; border-radius: 2px; padding: 0; cursor: pointer; color: #606266;">
+                                    <i class="el-icon el-icon-arrow-right" style="font-size: 13px;">
+                                        <svg viewBox="0 0 1024 1024" width="12" height="12">
+                                            <path d="M462.127 752c-8.19 0-16.379-3.124-22.628-9.372-12.496-12.497-12.496-32.759 0-45.256L591.875 544 439.499 390.627c-12.496-12.497-12.496-32.758 0-45.255 12.498-12.497 32.758-12.497 45.256 0l174.803 175.999c12.496 12.497 12.496 32.759 0 45.256L484.756 742.627C478.506 748.876 470.317 752 462.127 752z" fill="#606266"></path>
+                                        </svg>
+                                    </i>
+                                </button>
+                                <span class="el-pagination__jump" style="margin-left: 16px; font-size: 13px; color: #606266;">
+                                    前往
+                                    <div class="el-input el-pagination__editor is-in-pagination" style="width: 50px; margin: 0 5px;">
+                                        <input type="number" min="1" max="1" class="el-input__inner" value="1" style="height: 28px; line-height: 28px; text-align: center; font-size: 13px; border-radius: 3px; padding: 0 8px; border: 1px solid #DCDFE6;">
+                                    </div>
+                                    页
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="js/ai-assistant.js"></script>
+
+<!-- Vue组件初始化脚本 -->
+<script>
+    // 确保DOM加载完成
+    document.addEventListener('DOMContentLoaded', function() {
+        // 全局组件
+        const app = Vue.createApp({});
+        
+        // 注册全局组件
+        app.component('el-date-picker', ElementPlus.ElDatePicker);
+        app.component('el-input', ElementPlus.ElInput);
+        app.component('el-icon', ElementPlus.ElIcon);
+        
+        // 搜索组件
+        const searchApp = Vue.createApp({
+            template: `
+                <el-input
+                    v-model="searchText"
+                    placeholder="请输入回路名称/账户/门牌号"
+                    clearable
+                    @input="handleSearchInput"
+                    @clear="handleClear"
+                >
+                    <template #suffix>
+                        <el-icon class="el-input__icon">
+                            <svg viewBox="0 0 1024 1024" width="14" height="14">
+                                <path d="M909.6 854.5L649.9 594.8C690.2 542.7 712 479 712 412c0-80.2-31.3-155.4-87.9-212.1-56.6-56.7-132-87.9-212.1-87.9s-155.5 31.3-212.1 87.9C143.2 256.5 112 331.8 112 412c0 80.1 31.3 155.5 87.9 212.1C256.5 680.8 331.8 712 412 712c67 0 130.6-21.8 182.7-62l259.7 259.6c3.2 3.2 8.4 3.2 11.6 0l43.6-43.5c3.2-3.2 3.2-8.4 0-11.6zM570.4 570.4C528 612.7 471.8 636 412 636s-116-23.3-158.4-65.6C211.3 528 188 471.8 188 412s23.3-116.1 65.6-158.4C296 211.3 352.2 188 412 188s116.1 23.2 158.4 65.6S636 352.2 636 412s-23.3 116.1-65.6 158.4z" fill="#909399"></path>
+                            </svg>
+                        </el-icon>
+                    </template>
+                </el-input>
+            `,
+            data() {
+                return {
+                    searchText: ''
+                }
+            },
+            methods: {
+                handleSearchInput(value) {
+                    window.filterTableData && window.filterTableData();
+                },
+                handleClear() {
+                    window.filterTableData && window.filterTableData();
+                }
+            }
+        });
+        
+        // 日期选择器组件
+        const datePickerApp = Vue.createApp({
+            data() {
+                return {
+                    dateValue: formatDate(new Date()),
+                    monthValue: formatYearMonth(new Date()),
+                    dateRangeValue: getDefaultDateRange(),
+                    pickerType: 'date' // 'date', 'month', 'daterange'
+                }
+            },
+            computed: {
+                currentPlaceholder() {
+                    if (this.pickerType === 'date') return '选择日期';
+                    else if (this.pickerType === 'month') return '选择月份';
+                    else return '开始日期 - 结束日期';
+                }
+            },
+            template: `
+                <div>
+                    <el-date-picker
+                        v-model="dateValue"
+                        type="date"
+                        placeholder="选择日期"
+                        format="YYYY-MM-DD"
+                        value-format="YYYY-MM-DD"
+                        v-if="pickerType === 'date'"
+                        @change="handleDateChange"
+                        style="width: 100%;"
+                    />
+                    <el-date-picker
+                        v-model="monthValue"
+                        type="month"
+                        placeholder="选择月份"
+                        format="YYYY-MM"
+                        value-format="YYYY-MM"
+                        v-if="pickerType === 'month'"
+                        @change="handleMonthChange"
+                        style="width: 100%;"
+                    />
+                    <el-date-picker
+                        v-model="dateRangeValue"
+                        type="daterange"
+                        range-separator="-"
+                        start-placeholder="开始日期"
+                        end-placeholder="结束日期"
+                        format="YYYY-MM-DD"
+                        value-format="YYYY-MM-DD"
+                        v-if="pickerType === 'daterange'"
+                        @change="handleRangeChange"
+                        style="width: 100%;"
+                    />
+                </div>
+            `,
+            methods: {
+                setPickerType(type) {
+                    this.pickerType = type === 'day' ? 'date' : 
+                                     type === 'month' ? 'month' : 'daterange';
+                },
+                handleDateChange(val) {
+                    if (val) {
+                        window.currentDate = new Date(val);
+                        window.loadMeterData && window.loadMeterData('day');
+                    }
+                },
+                handleMonthChange(val) {
+                    if (val) {
+                        const [year, month] = val.split('-');
+                        window.currentDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+                        window.loadMeterData && window.loadMeterData('month');
+                    }
+                },
+                handleRangeChange(val) {
+                    if (val && val.length === 2) {
+                        window.currentDate = new Date(val[1]); // 设置当前日期为结束日期
+                        window.loadMeterData && window.loadMeterData('custom');
+                    }
+                }
+            }
+        });
+
+        // 格式化日期为 YYYY-MM-DD
+        function formatDate(date) {
+            const d = new Date(date);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+        
+        // 格式化日期为 YYYY-MM
+        function formatYearMonth(date) {
+            const d = new Date(date);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            return `${year}-${month}`;
+        }
+        
+        // 获取默认日期范围
+        function getDefaultDateRange() {
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(endDate.getDate() - 6);
+            return [formatDate(startDate), formatDate(endDate)];
+        }
+        
+        // 挂载到DOM
+        window.searchAppInstance = searchApp.use(ElementPlus).mount('#search-container');
+        window.datePickerAppInstance = datePickerApp.use(ElementPlus).mount('#date-picker-app');
+        
+        // 暴露到全局以便调用
+        window.datePickerApp = window.datePickerAppInstance;
+    });
+</script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 定义全局变量
+        let currentSelectedTenant = "恒和园"; // 默认选中的租户
+        let currentPage = 1; // 当前页码
+        let pageSize = 10; // 每页显示条数
+        let currentDate = new Date(); // 当前选择的日期
+        let currentViewType = 'day'; // 当前视图类型：day, month, custom
+        let currentMonthDays = 0; // 当月的天数
+        
+        // 全局暴露函数，供Vue组件调用
+        window.loadMeterData = loadMeterData;
+        window.filterTableData = filterTableData;
+        
+        // 初始化页面
+        initPage();
+        
+        // 初始化功能函数
+        function initPage() {
+            // 绑定租户树点击事件
+            bindTenantTreeEvents();
+            
+            // 初始化表格类型切换
+            initTableTabs();
+            
+            // 初始化分页
+            initPagination();
+            
+            // 初始导出按钮
+            initExportButton();
+            
+            // 初始化能源类型筛选器
+            initEnergyTypeFilter();
+            
+            // 初始化录入按钮功能
+            initInputMeterButton();
+            
+            // 加载初始数据
+            loadMeterData('day');
+            
+            // 初始化导航功能
+            initNavigation();
+            
+            // 新增：解析URL参数并应用
+            parseUrlParams();
+        }
+        
+        // 新增：解析URL参数并应用
+        function parseUrlParams() {
+            console.log('解析URL参数...');
+            
+            // 获取URL参数
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // 检查是否有AI助手传递的参数
+            const tenant = urlParams.get('tenant');
+            const meterType = urlParams.get('meterType');
+            const date = urlParams.get('date');
+            const searchKeyword = urlParams.get('searchKeyword');
+            
+            console.log('URL参数:', { tenant, meterType, date, searchKeyword });
+            
+            // 应用租户参数
+            if (tenant) {
+                console.log('尝试选择租户:', tenant);
+                selectTenantByName(tenant);
+            }
+            
+            // 应用表格类型参数
+            if (meterType) {
+                console.log('尝试设置表格类型:', meterType);
+                selectTableType(meterType);
+            }
+            
+            // 应用日期参数
+            if (date) {
+                console.log('尝试设置日期:', date);
+                setDateValue(date, meterType || 'day');
+            }
+            
+            // 应用搜索关键词参数
+            if (searchKeyword) {
+                console.log('尝试设置搜索关键词:', searchKeyword);
+                setSearchKeyword(searchKeyword);
+            }
+            
+            // 如果有任何参数被设置，立即加载数据
+            if (tenant || meterType || date || searchKeyword) {
+                // 延迟执行以确保参数设置已完成
+                setTimeout(() => {
+                    console.log('基于URL参数加载数据');
+                    loadMeterData(meterType || currentViewType);
+                }, 300);
+            }
+        }
+        
+        // 根据名称选择租户
+        function selectTenantByName(tenantName) {
+            // 找到匹配的租户节点
+            const treeNodes = document.querySelectorAll('.el-tree-node__content');
+            let found = false;
+            
+            treeNodes.forEach(nodeContent => {
+                const nodeLabel = nodeContent.querySelector('.el-tree-node__label');
+                if (nodeLabel && nodeLabel.textContent.trim() === tenantName) {
+                    // 模拟点击该节点
+                    console.log('找到匹配的租户节点:', tenantName);
+                    found = true;
+                    
+                    // 清除当前选中状态
+                    document.querySelectorAll('.el-tree-node.is-current').forEach(node => {
+                        node.classList.remove('is-current');
+                        const content = node.querySelector('.el-tree-node__content');
+                        if (content) {
+                            content.style.backgroundColor = 'white';
+                            const label = content.querySelector('.el-tree-node__label');
+                            if (label) {
+                                label.style.color = '#606266';
+                                label.style.fontWeight = 'normal';
+                            }
+                        }
+                    });
+                    
+                    // 设置新节点为选中状态
+                    const treeNode = nodeContent.closest('.el-tree-node');
+                    treeNode.classList.add('is-current');
+                    nodeContent.style.backgroundColor = '#F5F7FA';
+                    nodeLabel.style.color = '#409EFF';
+                    nodeLabel.style.fontWeight = '500';
+                    
+                    // 修改展开图标颜色
+                    const expandIcon = nodeContent.querySelector('.el-tree-node__expand-icon:not(.is-leaf)');
+                    if (expandIcon) {
+                        const svg = expandIcon.querySelector('svg path');
+                        if (svg) svg.setAttribute('fill', '#409EFF');
+                    }
+                    
+                    // 确保父节点是展开的
+                    const parentNode = treeNode.parentElement.closest('.el-tree-node');
+                    if (parentNode) {
+                        parentNode.classList.add('is-expanded');
+                        const parentExpandIcon = parentNode.querySelector('.el-tree-node__expand-icon');
+                        if (parentExpandIcon) {
+                            parentExpandIcon.style.transform = 'rotate(90deg)';
+                        }
+                        
+                        const childrenContainer = parentNode.querySelector('.el-tree-node__children');
+                        if (childrenContainer) {
+                            childrenContainer.style.display = 'block';
+                        }
+                    }
+                    
+                    // 更新左上角显示的租户名称
+                    document.getElementById('selectedTenantName').textContent = tenantName;
+                    
+                    // 更新全局变量
+                    currentSelectedTenant = tenantName;
+                }
+            });
+            
+            if (!found) {
+                console.warn('未找到匹配的租户:', tenantName);
+            }
+            
+            return found;
+        }
+        
+        // 选择表格类型
+        function selectTableType(type) {
+            const tabs = document.querySelectorAll('.table-tab');
+            const targetTab = Array.from(tabs).find(tab => tab.getAttribute('data-type') === type);
+            
+            if (targetTab) {
+                console.log('选择表格类型:', type);
+                
+                // 移除所有tab的active状态
+                tabs.forEach(t => {
+                    t.classList.remove('active');
+                    t.style.color = '#606266';
+                    const line = t.querySelector('div');
+                    if (line) line.remove();
+                });
+                
+                // 设置当前tab为active
+                targetTab.classList.add('active');
+                targetTab.style.color = '#00B45E';
+                
+                // 添加下划线
+                const line = document.createElement('div');
+                line.style.position = 'absolute';
+                line.style.bottom = '-1px';
+                line.style.left = '0';
+                line.style.width = '100%';
+                line.style.height = '2px';
+                line.style.backgroundColor = '#00B45E';
+                targetTab.appendChild(line);
+                
+                // 更新全局变量
+                currentViewType = type;
+                
+                // 更新用量标题
+                const usageHeader = document.getElementById('usageHeader');
+                if (usageHeader) {
+                    usageHeader.textContent = type === 'day' ? '日用量' : 
+                                            type === 'month' ? '月用量' : '时段用量';
+                }
+                
+                // 更新日期选择器类型
+                if (window.datePickerApp) {
+                    window.datePickerApp.setPickerType(type);
+                }
+                
+                return true;
+            } else {
+                console.warn('未找到匹配的表格类型:', type);
+                return false;
+            }
+        }
+        
+        // 设置日期值
+        function setDateValue(dateStr, type) {
+            if (!window.datePickerApp) {
+                console.warn('日期选择器组件未初始化');
+                return false;
+            }
+            
+            // 确定日期类型
+            let pickerType = type || currentViewType;
+            
+            if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                // 日期格式 YYYY-MM-DD
+                if (pickerType !== 'day') {
+                    // 如果设置的类型不是日表，但提供了日期，切换到日表
+                    selectTableType('day');
+                    pickerType = 'day';
+                }
+                
+                // 设置日期选择器值
+                window.datePickerApp.dateValue = dateStr;
+                window.datePickerApp.setPickerType('date');
+                
+                // 更新全局日期
+                currentDate = new Date(dateStr);
+                
+                console.log('设置日期值为:', dateStr);
+                return true;
+            } else if (dateStr.match(/^\d{4}-\d{2}$/)) {
+                // 月份格式 YYYY-MM
+                if (pickerType !== 'month') {
+                    // 如果设置的类型不是月表，但提供了月份，切换到月表
+                    selectTableType('month');
+                    pickerType = 'month';
+                }
+                
+                // 设置月份选择器值
+                window.datePickerApp.monthValue = dateStr;
+                window.datePickerApp.setPickerType('month');
+                
+                // 更新全局日期
+                const [year, month] = dateStr.split('-');
+                currentDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+                
+                console.log('设置月份值为:', dateStr);
+                return true;
+            }
+            
+            console.warn('不支持的日期格式:', dateStr);
+            return false;
+        }
+        
+        // 设置搜索关键词
+        function setSearchKeyword(keyword) {
+            if (!keyword) return false;
+            
+            // 查找搜索输入框
+            if (window.searchAppInstance) {
+                window.searchAppInstance.searchText = keyword;
+                console.log('设置搜索关键词:', keyword);
+                return true;
+            }
+            
+            console.warn('搜索组件未初始化');
+            return false;
+        }
+        
+        // 初始化Vue组件
+        function initVueComponents() {
+            // 创建日期选择器Vue实例
+            const datePickerApp = Vue.createApp(DatePickerApp).mount('#date-picker-app');
+            
+            // 将日期选择器实例暴露到全局，以便其他函数调用
+            window.datePickerApp = datePickerApp;
+            
+            // 创建搜索框Vue实例
+            const SearchComponent = {
+                data() {
+                    return {
+                        searchText: ''
+                    }
+                },
+                template: `
+                    <el-input
+                        v-model="searchText"
+                        placeholder="请输入回路名称/账户/门牌号"
+                        clearable
+                        @input="handleSearchInput"
+                        @clear="handleClear"
+                    >
+                        <template #suffix>
+                            <el-icon class="el-input__icon">
+                                <svg viewBox="0 0 1024 1024" width="14" height="14">
+                                    <path d="M909.6 854.5L649.9 594.8C690.2 542.7 712 479 712 412c0-80.2-31.3-155.4-87.9-212.1-56.6-56.7-132-87.9-212.1-87.9s-155.5 31.3-212.1 87.9C143.2 256.5 112 331.8 112 412c0 80.1 31.3 155.5 87.9 212.1C256.5 680.8 331.8 712 412 712c67 0 130.6-21.8 182.7-62l259.7 259.6c3.2 3.2 8.4 3.2 11.6 0l43.6-43.5c3.2-3.2 3.2-8.4 0-11.6zM570.4 570.4C528 612.7 471.8 636 412 636s-116-23.3-158.4-65.6C211.3 528 188 471.8 188 412s23.3-116.1 65.6-158.4C296 211.3 352.2 188 412 188s116.1 23.2 158.4 65.6S636 352.2 636 412s-23.3 116.1-65.6 158.4z" fill="#909399"></path>
+                            </svg>
+                        </el-icon>
+                    </template>
+                </el-input>
+            `,
+                methods: {
+                    handleSearchInput(value) {
+                        filterTableData();
+                    },
+                    handleClear() {
+                        filterTableData();
+                    }
+                }
+            };
+            
+            Vue.createApp(SearchComponent).mount('#search-container');
+        }
+        
+        // 更新表格表头
+        function updateTableHeaders(viewType) {
+            const hourlyHeadersRow = document.getElementById('hourlyHeaders');
+            if (!hourlyHeadersRow) return;
+            
+            // 保留固定列（序号、表计回路名称、账户名称、门牌号、变比、日/月用量）
+            // 清除所有动态列
+            const fixedColumns = 6; // 前6列是固定列
+            const headers = hourlyHeadersRow.querySelectorAll('th');
+            for (let i = fixedColumns; i < headers.length; i++) {
+                hourlyHeadersRow.removeChild(headers[i]);
+            }
+            
+            // 设置表头样式
+            const headerStyle = {
+                backgroundColor: '#FAFCFF',
+                padding: '0 16px',
+                textAlign: 'center',
+                fontSize: '12px',
+                fontWeight: '400',
+                color: '#424E5F',
+                border: '1px solid #EBEEF5',
+                minWidth: '100px',  // 改为100px
+                boxSizing: 'border-box',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                height: '50px',
+                lineHeight: '50px'
+            };
+            
+            // 应用样式到元素
+            function applyStyles(element, styles) {
+                for (const [property, value] of Object.entries(styles)) {
+                    element.style[property] = value;
+                }
+            }
+            
+            // 根据视图类型添加动态列
+            if (viewType === 'day') {
+                // 日表显示24小时
+                for (let hour = 0; hour < 24; hour++) {
+                    const hourHeader = document.createElement('th');
+                    applyStyles(hourHeader, headerStyle);
+                    hourHeader.textContent = `${hour.toString().padStart(2, '0')}:00`;
+                    hourlyHeadersRow.appendChild(hourHeader);
+                }
+            } else if (viewType === 'month') {
+                // 月表显示当月的每一天
+                const year = currentDate.getFullYear();
+                const month = currentDate.getMonth() + 1;
+                currentMonthDays = getDaysInMonth(year, month);
+                
+                for (let day = 1; day <= currentMonthDays; day++) {
+                    const dayHeader = document.createElement('th');
+                    applyStyles(dayHeader, headerStyle);
+                    dayHeader.textContent = `${day}日`;
+                    hourlyHeadersRow.appendChild(dayHeader);
+                }
+            } else if (viewType === 'custom') {
+                // 获取自定义时段的日期范围
+                let startDate, endDate;
+                
+                if (window.datePickerApp && window.datePickerApp.dateRangeValue) {
+                    const [startDateStr, endDateStr] = window.datePickerApp.dateRangeValue;
+                    startDate = new Date(startDateStr);
+                    endDate = new Date(endDateStr);
+                } else {
+                    // 默认显示最近7天
+                    endDate = new Date(currentDate);
+                    startDate = new Date(endDate);
+                    startDate.setDate(endDate.getDate() - 6);
+                }
+                
+                // 计算日期间隔天数
+                const dayDiff = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+                
+                for (let i = 0; i < dayDiff; i++) {
+                    const date = new Date(startDate);
+                    date.setDate(startDate.getDate() + i);
+                    
+                    const dayHeader = document.createElement('th');
+                    applyStyles(dayHeader, headerStyle);
+                    dayHeader.textContent = formatDate(date);
+                    hourlyHeadersRow.appendChild(dayHeader);
+                }
+            }
+        }
+        
+        // 渲染表格数据
+        function renderTable(data, viewType) {
+            const tableBody = document.getElementById('meterDataTable');
+            if (!tableBody) return;
+            
+            tableBody.innerHTML = '';
+            
+            if (!data || !data.records || data.records.length === 0) {
+                const emptyRow = document.createElement('tr');
+                const emptyCell = document.createElement('td');
+                
+                // 计算colspan
+                let colspan = 6; // 固定列
+                if (viewType === 'day') colspan += 24;
+                else if (viewType === 'month') colspan += currentMonthDays;
+                else if (viewType === 'custom') {
+                    // 获取自定义时段的日期范围
+                    let dayCount = 7; // 默认7天
+                    
+                    if (window.datePickerApp && window.datePickerApp.dateRangeValue) {
+                        const [startDateStr, endDateStr] = window.datePickerApp.dateRangeValue;
+                        const startDate = new Date(startDateStr);
+                        const endDate = new Date(endDateStr);
+                        dayCount = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+                    }
+                    
+                    colspan += dayCount;
+                }
+                
+                emptyCell.setAttribute('colspan', colspan);
+                emptyCell.style.textAlign = 'center';
+                emptyCell.style.padding = '20px';
+                emptyCell.style.color = '#909399';
+                emptyCell.textContent = '暂无数据';
+                
+                emptyRow.appendChild(emptyCell);
+                tableBody.appendChild(emptyRow);
+                return;
+            }
+            
+            // 单元格样式
+            const cellStyle = {
+                padding: '0 16px',
+                textAlign: 'center',
+                fontSize: '14px',
+                color: '#606266',
+                border: '1px solid #EBEEF5',
+                minWidth: '100px',
+                boxSizing: 'border-box',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                height: '50px',
+                lineHeight: '50px'
+            };
+            
+            // 固定列样式
+            const fixedCellStyle = {
+                position: 'sticky',
+                zIndex: '2',
+                backgroundColor: 'white',
+                padding: '0 8px',
+                textAlign: 'center',
+                fontSize: '14px',
+                color: '#606266',
+                border: '1px solid #EBEEF5',
+                boxSizing: 'border-box',
+                height: '50px',
+                lineHeight: '50px'
+            };
+            
+            // 新数据标签样式
+            const newDataBadgeStyle = {
+                display: 'inline-block',
+                background: '#FF7D00',
+                color: 'white',
+                fontSize: '12px',
+                padding: '2px 6px',
+                borderRadius: '10px',
+                marginLeft: '8px',
+                fontWeight: 'normal'
+            };
+            
+            // 应用样式到元素
+            function applyStyles(element, styles) {
+                for (const [property, value] of Object.entries(styles)) {
+                    element.style[property] = value;
+                }
+            }
+            
+            // 渲染数据行
+            data.records.forEach((record, index) => {
+                const row = document.createElement('tr');
+                
+                // 如果是新数据，设置行样式
+                if (record.isNew) {
+                    applyNewRowStyles(row);
+                }
+                        
+                // 渲染固定列
+                const fixedColumns = [
+                    { text: String((currentPage - 1) * pageSize + index + 1).padStart(2, '0'), width: 120 },
+                    { text: record.circuitName, width: 120, isNew: record.isNew },
+                    { text: record.accountName, width: 120 },
+                    { text: record.roomNumber, width: 100 },
+                    { text: record.ratio, width: 80 },
+                    { text: record.totalUsage, width: 100 }
+                ];
+                
+                fixedColumns.forEach((col, i) => {
+                    const cell = document.createElement('td');
+                    applyStyles(cell, fixedCellStyle);
+                    cell.style.width = `${col.width}px`;
+                    cell.style.left = `${i === 0 ? 0 : fixedColumns.slice(0, i).reduce((sum, c) => sum + c.width, 0)}px`;
+                    
+                    // 如果是表计回路名称列，且是新数据，添加"新"标签
+                    if (i === 1 && col.isNew) {
+                        const textSpan = document.createElement('span');
+                        textSpan.textContent = col.text;
+                        cell.appendChild(textSpan);
+                        
+                        const badge = document.createElement('span');
+                        badge.textContent = '新';
+                        badge.className = 'new-data-badge';
+                        applyStyles(badge, newDataBadgeStyle);
+                        cell.appendChild(badge);
+                    } else {
+                        cell.textContent = col.text;
+                    }
+                    
+                    row.appendChild(cell);
+                });
+                
+                // 渲染动态列
+                if (viewType === 'day') {
+                    // 日表显示24小时
+                    for (let hour = 0; hour < 24; hour++) {
+                        const cell = document.createElement('td');
+                        applyStyles(cell, cellStyle);
+                        cell.textContent = record.hourlyData && record.hourlyData[hour] ? record.hourlyData[hour] : '0.00';
+                        row.appendChild(cell);
+                    }
+                } else if (viewType === 'month') {
+                    // 月表显示当月的每一天
+                    for (let day = 1; day <= currentMonthDays; day++) {
+                        const cell = document.createElement('td');
+                        applyStyles(cell, cellStyle);
+                        cell.textContent = record.dailyData && record.dailyData[day - 1] ? record.dailyData[day - 1] : '0.00';
+                        row.appendChild(cell);
+                    }
+                } else if (viewType === 'custom') {
+                    // 自定义时段
+                    // 获取日期范围
+                    let dayCount = 7; // 默认7天
+                    
+                    if (window.datePickerApp && window.datePickerApp.dateRangeValue) {
+                        const [startDateStr, endDateStr] = window.datePickerApp.dateRangeValue;
+                        const startDate = new Date(startDateStr);
+                        const endDate = new Date(endDateStr);
+                        dayCount = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+                    }
+                    
+                    for (let i = 0; i < dayCount; i++) {
+                        const cell = document.createElement('td');
+                        applyStyles(cell, cellStyle);
+                        cell.textContent = record.customData && record.customData[i] ? record.customData[i] : '0.00';
+                        row.appendChild(cell);
+                    }
+                }
+                
+                tableBody.appendChild(row);
+            });
+        }
+        
+            // 应用新行样式
+    function applyNewRowStyles(row) {
+        // 设置基本背景色
+        row.style.backgroundColor = '#F0FFF4';
+        
+        // 添加绿色边框
+        row.style.boxShadow = '0 0 0 2px rgba(0, 180, 94, 0.7)';
+        
+        // 确保新行在最上层
+        row.style.position = 'relative';
+        row.style.zIndex = '1';
+        
+        // 添加CSS类名以便后续识别
+        row.classList.add('new-data-row');
+        
+        // 添加过渡效果
+        row.style.transition = 'background-color 0.3s, box-shadow 0.3s';
+        
+        // 为所有单元格中的文本设置绿色
+        const cells = row.querySelectorAll('td');
+        cells.forEach(cell => {
+            // 保留原始样式，只修改颜色
+            cell.style.color = '#00B45E';
+            // 增加字体权重使文字更显眼
+            cell.style.fontWeight = '500';
+        });
+        
+        // 添加更明显的高亮效果
+        row.animate([
+            { boxShadow: '0 0 0 2px rgba(0, 180, 94, 0.7)' },
+            { boxShadow: '0 0 0 6px rgba(0, 180, 94, 0.3)' },
+            { boxShadow: '0 0 0 2px rgba(0, 180, 94, 0.7)' }
+        ], {
+            duration: 1500,
+            iterations: 2
+        });
+    }
+        
+        // 初始化导航功能
+        function initNavigation() {
+            // 绑定主导航项点击事件
+            document.querySelectorAll('.nav-item').forEach(function(item) {
+                item.addEventListener('click', function(e) {
+                    const menuItem = document.getElementById('safetyMenuItem');
+                    if (menuItem && !this.contains(menuItem)) {
+                        document.querySelector('.subnav-container').classList.remove('visible');
+                        document.querySelector('.main-content').classList.remove('with-subnav');
+                    }
+                });
+            });
+            
+            // 绑定安全用电菜单点击事件
+            const safetyMenuItem = document.getElementById('safetyMenuItem');
+            if (safetyMenuItem) {
+                safetyMenuItem.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const subnavContainer = document.querySelector('.subnav-container');
+                    subnavContainer.classList.toggle('visible');
+                    document.querySelector('.main-content').classList.toggle('with-subnav');
+                });
+            }
+            
+            // 绑定二级导航项点击事件
+            document.querySelectorAll('.subnav-item').forEach(function(item) {
+                item.addEventListener('click', function(e) {
+                    // 如果点击的不是链接区域，则触发链接的点击事件
+                    if (!e.target.closest('a')) {
+                        const link = this.querySelector('a');
+                        if (link) link.click();
+                        return;
+                    }
+                    
+                    // 如果点击的是当前页面的链接，则阻止跳转
+                    const link = e.target.closest('a');
+                    if (link && link.getAttribute('data-page') === 'chaobiaojifei') {
+                        e.preventDefault();
+                        return;
+                    }
+                });
+            });
+            
+            // 更新页面标题和面包屑
+            const breadcrumb = document.querySelector('.breadcrumb');
+            if (breadcrumb) {
+                breadcrumb.innerHTML = '<span>安全用电 / 抄表计费</span>';
+            }
+            
+            // 更新tab标签
+            const tabElement = document.querySelector('.header-bottom .tab:not(.multitask)');
+            if (tabElement) {
+                tabElement.textContent = '抄表计费';
+            }
+        }
+        
+        // 绑定租户节点点击事件
+        function bindTenantTreeEvents() {
+            document.querySelectorAll('.el-tree-node__content').forEach(function(item) {
+                item.addEventListener('click', function(e) {
+                    // 如果点击的是展开图标
+                    if (e.target.closest('.el-tree-node__expand-icon:not(.is-leaf)')) {
+                        const treeNode = this.closest('.el-tree-node');
+                        const expandIcon = treeNode.querySelector('.el-tree-node__expand-icon:not(.is-leaf)');
+                        const childrenContainer = treeNode.querySelector('.el-tree-node__children');
+                        
+                        // 切换展开/折叠状态
+                        if (treeNode.classList.contains('is-expanded')) {
+                            treeNode.classList.remove('is-expanded');
+                            expandIcon.style.transform = 'rotate(0deg)';
+                            childrenContainer.style.display = 'none';
+                        } else {
+                            treeNode.classList.add('is-expanded');
+                            expandIcon.style.transform = 'rotate(90deg)';
+                            childrenContainer.style.display = 'block';
+                        }
+                        
+                        e.stopPropagation();
+                        return;
+                    }
+                    
+                    // 处理节点选中状态
+                    const treeNode = this.closest('.el-tree-node');
+                    const nodeLabel = this.querySelector('.el-tree-node__label');
+                    
+                    if (nodeLabel) {
+                        const tenantName = nodeLabel.textContent.trim();
+                        
+                        // 更新选中的租户
+                        currentSelectedTenant = tenantName;
+                        
+                        // 移除其他节点的选中状态
+                        document.querySelectorAll('.el-tree-node.is-current').forEach(function(node) {
+                            if (node !== treeNode) {
+                                node.classList.remove('is-current');
+                                const nodeContent = node.querySelector('.el-tree-node__content');
+                                nodeContent.style.backgroundColor = 'white';
+                                const label = nodeContent.querySelector('.el-tree-node__label');
+                                if (label) {
+                                    label.style.color = '#606266';
+                                    label.style.fontWeight = 'normal';
+                                }
+                                
+                                // 恢复展开图标颜色
+                                const expandIcon = nodeContent.querySelector('.el-tree-node__expand-icon:not(.is-leaf)');
+                                if (expandIcon) {
+                                    const svg = expandIcon.querySelector('svg path');
+                                    if (svg) svg.setAttribute('fill', '#C0C4CC');
+                                }
+                            }
+                        });
+                        
+                        // 设置当前节点选中状态
+                        treeNode.classList.add('is-current');
+                        this.style.backgroundColor = '#F5F7FA';
+                        if (nodeLabel) {
+                            nodeLabel.style.color = '#409EFF';
+                            nodeLabel.style.fontWeight = '500';
+                        }
+                        
+                        // 修改展开图标颜色
+                        const expandIcon = this.querySelector('.el-tree-node__expand-icon:not(.is-leaf)');
+                        if (expandIcon) {
+                            const svg = expandIcon.querySelector('svg path');
+                            if (svg) svg.setAttribute('fill', '#409EFF');
+                        }
+                        
+                        // 更新左上角显示的租户名称
+                        document.getElementById('selectedTenantName').textContent = tenantName;
+                        
+                        // 重置分页并加载表格数据
+                        currentPage = 1;
+                        loadMeterData(currentViewType);
+                    }
+                });
+            });
+        }
+        
+        // 初始化表格类型切换
+        function initTableTabs() {
+            const tabs = document.querySelectorAll('.table-tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // 移除所有tab的active状态
+                    tabs.forEach(t => {
+                        t.classList.remove('active');
+                        t.style.color = '#606266';
+                        const line = t.querySelector('div');
+                        if (line) line.remove();
+                    });
+                    
+                    // 设置当前tab为active
+                    this.classList.add('active');
+                    this.style.color = '#00B45E';
+                    
+                    // 添加下划线
+                    const line = document.createElement('div');
+                    line.style.position = 'absolute';
+                    line.style.bottom = '-1px';
+                    line.style.left = '0';
+                    line.style.width = '100%';
+                    line.style.height = '2px';
+                    line.style.backgroundColor = '#00B45E';
+                    this.appendChild(line);
+                    
+                    // 获取视图类型
+                    const viewType = this.getAttribute('data-type');
+                    currentViewType = viewType;
+                    
+                    // 更新用量标题
+                    const usageHeader = document.getElementById('usageHeader');
+                    if (usageHeader) {
+                        usageHeader.textContent = viewType === 'day' ? '日用量' : 
+                                                viewType === 'month' ? '月用量' : '时段用量';
+                    }
+                    
+                    // 更新日期选择器类型
+                    if (window.datePickerApp) {
+                        window.datePickerApp.setPickerType(viewType);
+                    }
+                    
+                    // 加载对应类型的数据
+                    loadMeterData(viewType);
+                });
+            });
+        }
+        
+        // 初始化搜索功能
+        function initSearchFunction() {
+            const searchInput = document.getElementById('searchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    filterTableData();
+                });
+                
+                // 添加搜索按钮点击事件
+                const searchIcon = searchInput.nextElementSibling.querySelector('.el-icon-search');
+                if (searchIcon) {
+                searchIcon.addEventListener('click', function() {
+                        filterTableData();
+                    });
+                }
+            }
+        }
+        
+        // 筛选表格数据
+        function filterTableData() {
+            const searchInput = document.getElementById('searchInput');
+            const energyTypeSelect = document.getElementById('energyTypeSelect');
+            
+            const searchValue = searchInput ? searchInput.value.trim().toLowerCase() : '';
+            const energyType = energyTypeSelect ? energyTypeSelect.getAttribute('data-value') || '电能' : '电能';
+            
+            // 重新加载表格数据，加入筛选参数
+            loadMeterData(currentViewType, {
+                search: searchValue,
+                energyType: energyType
+            });
+        }
+        
+        // 初始化能源类型筛选器
+        function initEnergyTypeFilter() {
+            const energyTypeSelect = document.getElementById('energyTypeSelect');
+            const selectedEnergyType = document.getElementById('selectedEnergyType');
+            if (!energyTypeSelect || !selectedEnergyType) return;
+            
+            // 设置初始值属性（默认选中电能）
+            energyTypeSelect.setAttribute('data-value', '电能');
+            selectedEnergyType.textContent = '电能';
+            
+            // 禁用下拉功能
+            energyTypeSelect.parentElement.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                // 不做任何操作，禁用下拉菜单
+            });
+        }
+        
+        // 初始化导出按钮功能
+        function initExportButton() {
+            const exportBtn = document.getElementById('exportExcelBtn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', function() {
+                    exportTableToExcel();
+                });
+            }
+        }
+        
+        // 导出表格到Excel
+        function exportTableToExcel() {
+            // 创建一个工作表数据
+            let tableHTML = '<table>';
+            
+            // 添加表头
+            const headerRow = document.getElementById('hourlyHeaders');
+            if (headerRow) {
+                tableHTML += '<tr>';
+                const headers = headerRow.querySelectorAll('th');
+                headers.forEach(header => {
+                    tableHTML += `<th>${header.textContent}</th>`;
+                });
+                tableHTML += '</tr>';
+            }
+            
+            // 添加表格数据
+            const rows = document.getElementById('meterDataTable').querySelectorAll('tr');
+            rows.forEach(row => {
+                tableHTML += '<tr>';
+                const cells = row.querySelectorAll('td');
+                cells.forEach(cell => {
+                    tableHTML += `<td>${cell.textContent}</td>`;
+                });
+                tableHTML += '</tr>';
+            });
+            
+            tableHTML += '</table>';
+            
+            // 创建一个Blob对象
+            const blob = new Blob([tableHTML], {type: 'application/vnd.ms-excel'});
+            
+            // 创建下载链接
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            
+            // 设置文件名
+            const dateStr = formatDate(currentDate);
+            link.download = `抄表计费数据_${dateStr}.xls`;
+            
+            // 触发下载
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // 初始化录入按钮功能
+        function initInputMeterButton() {
+            const inputBtn = document.getElementById('inputMeterBtn');
+            if (inputBtn) {
+                inputBtn.addEventListener('click', function() {
+                    openMeterEntryPopup();
+                });
+            }
+        }
+        
+        // 打开抄表录入弹窗
+        function openMeterInputPopup() {
+            // 创建iframe元素
+            const iframe = document.createElement('iframe');
+            iframe.src = 'popup-meters.html';
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.border = 'none';
+            iframe.style.position = 'fixed';
+            iframe.style.top = '0';
+            iframe.style.left = '0';
+            iframe.style.zIndex = '9999';
+            
+            // 添加到body
+            document.body.appendChild(iframe);
+            
+            // 设置iframe通信
+            window.addEventListener('message', handlePopupMessage);
+            
+            // 处理来自弹窗的消息
+            function handlePopupMessage(event) {
+                if (event.data.type === 'closePopup') {
+                    // 关闭弹窗
+                    document.body.removeChild(iframe);
+                    window.removeEventListener('message', handlePopupMessage);
+                } else if (event.data.type === 'submitData') {
+                    // 处理提交的数据
+                    const newData = event.data.data;
+                    updateTableWithNewData(newData);
+                    
+                    // 关闭弹窗
+                    document.body.removeChild(iframe);
+                    window.removeEventListener('message', handlePopupMessage);
+                    
+                    // 显示成功提示
+                    showMessage('录入成功', 'success');
+                }
+            }
+        }
+        
+        // 新增：打开带有AI助手的抄表录入弹窗
+        function openMeterEntryPopup() {
+            // 创建iframe元素
+            const iframe = document.createElement('iframe');
+            iframe.src = 'popup-meters.html';
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.border = 'none';
+            iframe.style.position = 'fixed';
+            iframe.style.top = '0';
+            iframe.style.left = '0';
+            iframe.style.zIndex = '9999';
+            
+            // 添加到body
+            document.body.appendChild(iframe);
+            
+            // 设置iframe通信
+            window.addEventListener('message', handlePopupMessage);
+            
+            // 处理来自弹窗的消息
+            function handlePopupMessage(event) {
+                if (event.data.type === 'closePopup') {
+                    // 关闭弹窗
+                    document.body.removeChild(iframe);
+                    window.removeEventListener('message', handlePopupMessage);
+                } else if (event.data.type === 'submitData') {
+                    // 处理提交的数据
+                    const newData = event.data.data;
+                    updateTableWithNewData(newData);
+                    
+                    // 关闭弹窗
+                    document.body.removeChild(iframe);
+                    window.removeEventListener('message', handlePopupMessage);
+                    
+                    // 显示成功提示
+                    showMessage('录入成功', 'success');
+                }
+            }
+        }
+        
+        // 更新表格数据
+        function updateTableWithNewData(newData) {
+            // 这里处理新录入的数据，将其添加到表格中
+            // 在实际应用中，这应该发送到服务器然后重新加载数据
+            console.log('更新表格数据:', newData);
+            
+            if (!newData || newData.length === 0) return;
+            
+            // 获取当前视图类型
+            let viewType = currentViewType;
+            
+            // 如果新数据中有日期信息，更新当前日期
+            const lastRecord = newData[newData.length - 1];
+            if (lastRecord && lastRecord.readTime) {
+                const readDate = new Date(lastRecord.readTime);
+                if (!isNaN(readDate.getTime())) { // 确保日期有效
+                    currentDate = readDate;
+                    
+                    // 更新日期选择器的值
+                    if (window.datePickerApp) {
+                        if (viewType === 'day') {
+                            window.datePickerApp.dateValue = formatDate(currentDate);
+                        } else if (viewType === 'month') {
+                            window.datePickerApp.monthValue = formatYearMonth(currentDate);
+                        }
+                    }
+                }
+            }
+            
+            // 将新数据添加到模拟服务器数据
+            addMockData(newData);
+            
+            // 回到第一页，确保用户能看到新添加的数据
+            currentPage = 1;
+            
+            // 清空筛选条件，确保显示所有数据
+            if (window.filterApp) {
+                window.filterApp.searchText = '';
+            }
+            
+            // 延迟一点时间执行，确保DOM已更新
+            setTimeout(() => {
+                // 重新加载表格数据，并滚动到最新数据
+                loadMeterData(viewType, {}, true);
+                
+                // 显示成功信息
+                showMessage(`成功添加${newData.length}条抄表数据`, 'success');
+            }, 100);
+        }
+        
+        // 添加模拟数据
+        function addMockData(newData) {
+            // 全局变量，存储新添加的数据
+            if (!window.newAddedData) {
+                window.newAddedData = [];
+            }
+            
+            // 清除之前的所有新数据标记
+            if (window.newAddedData.length > 0) {
+                window.newAddedData.forEach(record => {
+                    record.isNew = false;
+                });
+            }
+            
+            // 将新数据添加到我们的数组中，覆盖同名表计的数据
+            newData.forEach(record => {
+                // 检查是否存在同名的表计数据
+                const existingIndex = window.newAddedData.findIndex(
+                    item => item.circuitName === record.circuitName
+                );
+                
+                // 为新数据准备小时数据或日数据
+                let hourlyData = {};
+                let dailyData = [];
+                
+                // 基于当前日期设置当天的读数或当月的当天读数
+                const currentDay = currentDate.getDate();
+                const reading = parseFloat(record.reading) || 0;
+                
+                // 当前小时
+                const currentHour = new Date().getHours();
+                
+                // 生成小时数据
+                for (let hour = 0; hour < 24; hour++) {
+                    if (hour === currentHour) {
+                        hourlyData[hour] = reading.toFixed(2);
+                    } else {
+                        hourlyData[hour] = '0.00';
+                    }
+                }
+                
+                // 生成日数据（用于月视图）
+                const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
+                for (let day = 1; day <= daysInMonth; day++) {
+                    if (day === currentDay) {
+                        dailyData.push(reading.toFixed(2));
+                    } else {
+                        dailyData.push('0.00');
+                    }
+                }
+                
+                if (existingIndex >= 0) {
+                    // 更新现有数据
+                    window.newAddedData[existingIndex] = {
+                        ...window.newAddedData[existingIndex],
+                        circuitName: record.circuitName,
+                        accountName: record.accountName || window.newAddedData[existingIndex].accountName,
+                        roomNumber: record.roomNumber || window.newAddedData[existingIndex].roomNumber,
+                        ratio: record.ratio || window.newAddedData[existingIndex].ratio,
+                        totalUsage: record.reading || '0.00', // 用读数作为总用量
+                        readTime: record.readTime,
+                        hourlyData: hourlyData,
+                        dailyData: dailyData,
+                        isNew: true, // 标记为新数据
+                        energyType: '电能', // 默认为电能
+                        timestamp: Date.now() // 更新时间戳
+                    };
+                } else {
+                    // 添加新数据
+                    window.newAddedData.push({
+                        id: Date.now() + Math.floor(Math.random() * 1000), // 生成唯一ID
+                        circuitName: record.circuitName,
+                        accountName: record.accountName || '',
+                        roomNumber: record.roomNumber || '',
+                        ratio: record.ratio || '1.0',
+                        totalUsage: record.reading || '0.00', // 用读数作为总用量
+                        readTime: record.readTime,
+                        hourlyData: hourlyData,
+                        dailyData: dailyData,
+                        isNew: true, // 标记为新数据
+                        energyType: '电能', // 默认为电能
+                        timestamp: Date.now() // 添加时间戳用于排序
+                    });
+                }
+            });
+        }
+        
+        // 滚动到新数据
+        function scrollToNewData() {
+            console.log('尝试滚动到新数据行');
+            
+            // 查找带有新数据标记的行
+            const newRows = document.querySelectorAll('.new-data-badge');
+            console.log(`找到 ${newRows.length} 个带有新数据标记的行`);
+            
+            if (newRows.length > 0) {
+                // 获取第一个新数据行
+                const firstNewRow = newRows[0].closest('tr');
+                if (firstNewRow) {
+                    console.log('找到新数据行，滚动到该行');
+                    
+                    // 确保表格容器可见
+                    const tableContainer = document.querySelector('.table-container');
+                    if (tableContainer) {
+                        tableContainer.scrollLeft = 0; // 先水平滚动到左侧，以便查看固定列
+                    }
+                    
+                    // 滚动到该行
+                    firstNewRow.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                    
+                    // 重新应用高亮样式确保可见
+                    applyNewRowStyles(firstNewRow);
+                    
+                    // 添加闪烁效果
+                    setTimeout(() => {
+                        firstNewRow.style.backgroundColor = '#FFFEF0';
+                    }, 500);
+                    setTimeout(() => {
+                        firstNewRow.style.backgroundColor = '#F0FFF4';
+                    }, 1000);
+                    setTimeout(() => {
+                        firstNewRow.style.backgroundColor = '#FFFEF0';
+                    }, 1500);
+                    
+                    // 再次添加高亮，确保用户注意到
+                    setTimeout(() => {
+                        firstNewRow.animate([
+                            { boxShadow: '0 0 0 2px rgba(0, 180, 94, 0.7)' },
+                            { boxShadow: '0 0 0 8px rgba(0, 180, 94, 0.3)' },
+                            { boxShadow: '0 0 0 2px rgba(0, 180, 94, 0.7)' }
+                        ], {
+                            duration: 1500,
+                            iterations: 2
+                        });
+                    }, 2000);
+                } else {
+                    console.log('找到新数据标记，但未找到关联的行');
+                }
+            } else {
+                console.log('未找到新数据标记');
+            }
+        }
+        
+        // 显示消息提示
+        function showMessage(message, type = 'info') {
+            const messageBox = document.createElement('div');
+            messageBox.className = `el-message el-message--${type}`;
+            messageBox.style.position = 'fixed';
+            messageBox.style.top = '20px';
+            messageBox.style.left = '50%';
+            messageBox.style.transform = 'translateX(-50%)';
+            messageBox.style.padding = '10px 20px';
+            messageBox.style.borderRadius = '4px';
+            messageBox.style.backgroundColor = type === 'success' ? '#f0f9eb' : '#edf2fc';
+            messageBox.style.border = `1px solid ${type === 'success' ? '#e1f3d8' : '#ebeef5'}`;
+            messageBox.style.color = type === 'success' ? '#67c23a' : '#909399';
+            messageBox.style.zIndex = '10000';
+            messageBox.style.display = 'flex';
+            messageBox.style.alignItems = 'center';
+            
+            // 添加图标
+            const icon = document.createElement('i');
+            icon.className = `el-icon-${type === 'success' ? 'success' : 'info'}`;
+            icon.innerHTML = type === 'success' 
+                ? '<svg viewBox="0 0 1024 1024" width="16" height="16"><path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm193.5 301.7l-210.6 292a31.8 31.8 0 0 1-51.7 0L318.5 484.9c-3.8-5.3 0-12.7 6.5-12.7h46.9c10.2 0 19.9 4.9 25.9 13.3l71.2 98.8 157.2-218c6-8.3 15.6-13.3 25.9-13.3H699c6.5 0 10.3 7.4 6.5 12.7z" fill="#67C23A"></path></svg>'
+                : '<svg viewBox="0 0 1024 1024" width="16" height="16"><path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm32 664c0 4.4-3.6 8-8 8h-48c-4.4 0-8-3.6-8-8v-48c0-4.4 3.6-8 8-8h48c4.4 0 8 3.6 8 8v48zm0-112c0 4.4-3.6 8-8 8h-48c-4.4 0-8-3.6-8-8V296c0-4.4 3.6-8 8-8h48c4.4 0 8 3.6 8 8v320z" fill="#909399"></path></svg>';
+            icon.style.marginRight = '10px';
+            
+            messageBox.appendChild(icon);
+            
+            // 添加消息文本
+            const text = document.createElement('span');
+            text.textContent = message;
+            messageBox.appendChild(text);
+            
+            // 添加到body
+            document.body.appendChild(messageBox);
+            
+            // 自动关闭
+            setTimeout(() => {
+                messageBox.style.opacity = '0';
+                messageBox.style.transition = 'opacity 0.3s';
+                setTimeout(() => {
+                    document.body.removeChild(messageBox);
+                }, 300);
+            }, 3000);
+        }
+        
+        // 扩展loadMeterData函数，支持筛选和滚动到新数据
+        function loadMeterData(viewType, filters = {}, scrollToNew = false) {
+            currentViewType = viewType;
+            
+            // 更新表头
+            updateTableHeaders(viewType);
+            
+            // 更新用量标题
+            const usageHeader = document.getElementById('usageHeader');
+            if (usageHeader) {
+                usageHeader.textContent = viewType === 'day' ? '日用量' : viewType === 'month' ? '月用量' : '时段用量';
+            }
+            
+            // 模拟从服务器获取数据
+            // 在实际应用中，应该发送 AJAX 请求获取数据
+            setTimeout(() => {
+                // 生成模拟数据
+                const data = getMockData(viewType);
+                
+                // 应用筛选
+                const filteredData = applyFilters(data, filters);
+                
+                // 渲染表格
+                renderTable(filteredData, viewType);
+                
+                // 更新分页
+                updatePagination(filteredData.total);
+                
+                // 如果需要滚动到新数据
+                if (scrollToNew) {
+                    setTimeout(() => {
+                        scrollToNewData();
+                    }, 300);
+                }
+            }, 300);
+        }
+        
+        // 应用筛选器
+        function applyFilters(data, filters) {
+            if (!filters || Object.keys(filters).length === 0) {
+                return data;
+            }
+            
+            const { search, energyType } = filters;
+            
+            // 如果没有任何筛选条件，直接返回原始数据
+            if (!search && !energyType) {
+                return data;
+            }
+            
+            const filteredRecords = data.records.filter(record => {
+                let matchesSearch = true;
+                let matchesEnergyType = true;
+                
+                // 应用搜索条件
+                if (search) {
+                    const lowerSearch = search.toLowerCase();
+                    matchesSearch = 
+                        record.circuitName.toLowerCase().includes(lowerSearch) ||
+                        record.accountName.toLowerCase().includes(lowerSearch) ||
+                        record.roomNumber.toLowerCase().includes(lowerSearch);
+                }
+                
+                // 应用能源类型筛选
+                if (energyType && energyType !== '全部') {
+                    matchesEnergyType = record.energyType === energyType;
+                }
+                
+                return matchesSearch && matchesEnergyType;
+            });
+            
+            return {
+                records: filteredRecords,
+                total: filteredRecords.length
+            };
+        }
+        
+        // 获取模拟数据
+        function getMockData(viewType) {
+            // 创建模拟数据
+            const mockRecords = [];
+            const total = 20; // 降低默认记录数，让新记录更容易看到
+            
+            // 能源类型数组 - 仅保留电能
+            const energyTypes = ['电能'];
+            
+            // 如果有新添加的数据，检查是否包含某些电表编号，避免重复
+            const existingCircuitNames = new Set();
+            if (window.newAddedData && window.newAddedData.length > 0) {
+                window.newAddedData.forEach(record => {
+                    if (record.circuitName) {
+                        existingCircuitNames.add(record.circuitName);
+                    }
+                });
+            }
+            
+            for (let i = 0; i < total; i++) {
+                // 构建电表名称，但跳过已存在于新添加数据中的名称
+                let circuitName = `电表${i + 1}号`;
+                if (existingCircuitNames.has(circuitName)) {
+                    continue; // 跳过已存在的电表名称
+                }
+                
+                const energyType = '电能'; // 固定为电能
+                
+                // 创建一条记录
+                const record = {
+                    id: i + 1,
+                    circuitName: circuitName,
+                    accountName: `账户${Math.floor(i / 5) + 1}`,
+                    roomNumber: `${String.fromCharCode(65 + Math.floor(i / 10))}${(i % 10) + 1}室`,
+                    ratio: Math.random() > 0.5 ? '1.0' : '1.5',
+                    totalUsage: (Math.random() * 100).toFixed(2),
+                    energyType: energyType,
+                    isNew: false // 默认不是新数据
+                };
+                
+                // 根据视图类型添加不同的时间数据
+                if (viewType === 'day') {
+                    // 添加24小时数据
+                    record.hourlyData = {};
+                    for (let hour = 0; hour < 24; hour++) {
+                        record.hourlyData[hour] = (Math.random() * 5).toFixed(2);
+                    }
+                } else if (viewType === 'month') {
+                    // 添加当月每天数据
+                    const year = currentDate.getFullYear();
+                    const month = currentDate.getMonth() + 1;
+                    const daysInMonth = getDaysInMonth(year, month);
+                    
+                    record.dailyData = [];
+                    for (let day = 0; day < daysInMonth; day++) {
+                        record.dailyData.push((Math.random() * 10).toFixed(2));
+                    }
+                } else if (viewType === 'custom') {
+                    // 添加自定义时段数据（假设7天）
+                    record.customData = [];
+                    for (let day = 0; day < 7; day++) {
+                        record.customData.push((Math.random() * 15).toFixed(2));
+                    }
+                }
+                
+                mockRecords.push(record);
+            }
+            
+            // 合并新添加的数据
+            if (window.newAddedData && window.newAddedData.length > 0) {
+                window.newAddedData.forEach(newRecord => {
+                    const record = {...newRecord};
+                    
+                    // 添加时间数据
+                    if (viewType === 'day') {
+                        // 使用读数作为当前小时数据
+                        record.hourlyData = {};
+                        const readHour = new Date(record.readTime).getHours();
+                        for (let hour = 0; hour < 24; hour++) {
+                            record.hourlyData[hour] = hour === readHour ? record.totalUsage : '0.00';
+                        }
+                    } else if (viewType === 'month') {
+                        // 使用读数作为当前日期的数据
+                        const readDay = new Date(record.readTime).getDate();
+                        const year = currentDate.getFullYear();
+                        const month = currentDate.getMonth() + 1;
+                        const daysInMonth = getDaysInMonth(year, month);
+                        
+                        record.dailyData = [];
+                        for (let day = 0; day < daysInMonth; day++) {
+                            record.dailyData.push(day + 1 === readDay ? record.totalUsage : '0.00');
+                        }
+                    } else if (viewType === 'custom') {
+                        // 自定义时段数据
+                        record.customData = [];
+                        const readDate = new Date(record.readTime);
+                        
+                        let startDate, endDate;
+                        if (window.datePickerApp && window.datePickerApp.dateRangeValue) {
+                            const [startDateStr, endDateStr] = window.datePickerApp.dateRangeValue;
+                            startDate = new Date(startDateStr);
+                            endDate = new Date(endDateStr);
+                        } else {
+                            endDate = new Date(currentDate);
+                            startDate = new Date(endDate);
+                            startDate.setDate(endDate.getDate() - 6);
+                        }
+                        
+                        const dayDiff = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+                        
+                        for (let i = 0; i < dayDiff; i++) {
+                            const date = new Date(startDate);
+                            date.setDate(startDate.getDate() + i);
+                            
+                            // 检查是否是相同日期
+                            const isSameDate = date.getDate() === readDate.getDate() &&
+                                             date.getMonth() === readDate.getMonth() &&
+                                             date.getFullYear() === readDate.getFullYear();
+                            
+                            record.customData.push(isSameDate ? record.totalUsage : '0.00');
+                        }
+                    }
+                    
+                    mockRecords.push(record);
+                });
+            }
+            
+            // 分页处理
+            const start = (currentPage - 1) * pageSize;
+            const end = Math.min(start + pageSize, mockRecords.length);
+            const paginatedRecords = mockRecords.slice(start, end);
+            
+            return {
+                records: paginatedRecords,
+                total: mockRecords.length
+            };
+        }
+        
+        // 初始化分页
+        function initPagination() {
+            // 分页按钮点击事件
+            document.querySelector('.btn-prev').addEventListener('click', function() {
+                    if (this.hasAttribute('disabled')) return;
+                currentPage--;
+                loadMeterData(currentViewType);
+                });
+            
+            document.querySelector('.btn-next').addEventListener('click', function() {
+                    if (this.hasAttribute('disabled')) return;
+                currentPage++;
+                loadMeterData(currentViewType);
+            });
+            
+            // 页码点击事件
+            document.querySelector('.el-pager').addEventListener('click', function(e) {
+                if (e.target.classList.contains('number')) {
+                    const page = parseInt(e.target.textContent);
+                    if (page !== currentPage) {
+                        currentPage = page;
+                        loadMeterData(currentViewType);
+                    }
+                }
+            });
+            
+            // 跳转页码输入框
+            document.querySelector('.el-pagination__editor .el-input__inner').addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        const page = parseInt(this.value);
+                        const max = parseInt(this.getAttribute('max'));
+                        if (page >= 1 && page <= max) {
+                        currentPage = page;
+                        loadMeterData(currentViewType);
+                        } else {
+                            this.value = currentPage;
+                        }
+                    }
+                });
+        }
+        
+        // 获取某月的天数
+        function getDaysInMonth(year, month) {
+            return new Date(year, month, 0).getDate();
+        }
+
+        // 更新分页
+        function updatePagination(total) {
+            const totalPages = Math.ceil(total / pageSize);
+            
+            // 更新总条数显示
+            const totalSpan = document.querySelector('.el-pagination__total');
+            if (totalSpan) {
+                totalSpan.textContent = `共 ${total} 条`;
+            }
+            
+            // 更新页码按钮
+            const pager = document.querySelector('.el-pager');
+            if (pager) {
+                pager.innerHTML = '';
+                
+                // 简单分页实现，实际项目中应该有更复杂的分页逻辑
+                for (let i = 1; i <= totalPages; i++) {
+                    const li = document.createElement('li');
+                    li.className = `number${i === currentPage ? ' active' : ''}`;
+                    li.style.minWidth = '30px';
+                    li.style.height = '32px';
+                    li.style.lineHeight = '32px';
+                    li.style.textAlign = 'center';
+                    li.style.margin = '0 5px';
+                    li.style.cursor = 'pointer';
+                    
+                    if (i === currentPage) {
+                        li.style.color = '#fff';
+                        li.style.backgroundColor = '#00B45E';
+                        li.style.borderRadius = '2px';
+                        li.style.fontWeight = 'bold';
+                    }
+                    
+                    li.textContent = i;
+                    pager.appendChild(li);
+                }
+            }
+            
+            // 更新上一页按钮状态
+            const prevBtn = document.querySelector('.btn-prev');
+            if (prevBtn) {
+                if (currentPage <= 1) {
+                    prevBtn.setAttribute('disabled', 'disabled');
+                    prevBtn.style.backgroundColor = '#f4f4f5';
+                    prevBtn.style.cursor = 'not-allowed';
+                } else {
+                    prevBtn.removeAttribute('disabled');
+                    prevBtn.style.backgroundColor = '#fff';
+                    prevBtn.style.cursor = 'pointer';
+                }
+            }
+            
+            // 更新下一页按钮状态
+            const nextBtn = document.querySelector('.btn-next');
+            if (nextBtn) {
+                if (currentPage >= totalPages) {
+                    nextBtn.setAttribute('disabled', 'disabled');
+                    nextBtn.style.backgroundColor = '#f4f4f5';
+                    nextBtn.style.cursor = 'not-allowed';
+                } else {
+                    nextBtn.removeAttribute('disabled');
+                    nextBtn.style.backgroundColor = '#fff';
+                    nextBtn.style.cursor = 'pointer';
+                }
+            }
+            
+            // 更新跳转页码输入框
+            const pageInput = document.querySelector('.el-pagination__editor .el-input__inner');
+            if (pageInput) {
+                pageInput.setAttribute('max', totalPages);
+                pageInput.value = currentPage;
+            }
+        }
+    });
+</script>
+</body>
+</html> 

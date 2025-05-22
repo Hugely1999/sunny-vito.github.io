@@ -15,7 +15,7 @@ body {
 .container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 20px;
+    width: 100%;
 }
 
 h1 {
@@ -289,7 +289,7 @@ a {
 .tab.active {
     color: #00B45E;
     font-weight: 500;
-    background-color: #F9FAFB;
+    background-color: #fff;
 }
 
 .tab:hover {
